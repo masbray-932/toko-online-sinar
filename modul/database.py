@@ -21,7 +21,7 @@ def init_db():
         )
     """)
     
-    # 2. FITUR AUTO-FIX: Cek apakah kolom 'role' sudah ada, jika belum disuntikkan otomatis
+    # 2. FITUR AUTO-FIX Kolom Role
     try:
         cursor.execute("SELECT role FROM pengguna LIMIT 1")
     except sqlite3.OperationalError:
@@ -29,7 +29,7 @@ def init_db():
         cursor.execute("ALTER TABLE pengguna ADD COLUMN role TEXT DEFAULT 'user'")
         conn.commit()
 
-    # 3. Pastikan tabel produk juga otomatis terbuat di database
+    # 3. Pastikan tabel produk otomatis terbuat
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS produk (
             nama TEXT PRIMARY KEY,
@@ -51,8 +51,19 @@ def init_db():
             bukti_transfer TEXT
         )
     """)
-    
     conn.commit()
+    
+    # 🌟 KEAJAIBAN DI SINI: Impor ditaruh di dalam agar tidak memicu Circular Import
+    cursor.execute("SELECT username FROM pengguna WHERE username = 'admin'")
+    if not cursor.fetchone():
+        from modul.keamanan import hash_password # 👈 Pindah ke sini, aman 100%!
+        password_admin_hashed = hash_password("admin123")
+        cursor.execute("""
+            INSERT INTO pengguna (username, password, email, role) 
+            VALUES ('admin', ?, 'admin@toko.com', 'admin')
+        """, (password_admin_hashed,))
+        conn.commit()
+        
     conn.close()
 
 # ==============================================================================
