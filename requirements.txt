@@ -2,4 +2,3 @@ streamlit
 bcrypt
 requests
 fpdf2
-streamlit-cookies-controller
