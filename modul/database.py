@@ -1,4 +1,4 @@
-import streamlit as st  # 🌟 TAMBAHAN: Wajib di-import agar st.info bisa berjalan
+import streamlit as st  
 import sqlite3
 import json
 from datetime import datetime
@@ -6,7 +6,7 @@ from datetime import datetime
 DB_NAME = "toko_online.db"
 
 # ==============================================================================
-# FUNGSI INISIALISASI DATABASE UTAMA
+# FUNGSI INISIALISASI DATABASE UTAMA (MURNI TANPA IMPOR KEANAMAN)
 # ==============================================================================
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -52,39 +52,27 @@ def init_db():
         )
     """)
     conn.commit()
-    
-    # 🌟 KEAJAIBAN DI SINI: Impor ditaruh di dalam agar tidak memicu Circular Import
-    cursor.execute("SELECT username FROM pengguna WHERE username = 'admin'")
-    if not cursor.fetchone():
-        from modul.keamanan import hash_password # 👈 Pindah ke sini, aman 100%!
-        password_admin_hashed = hash_password("admin123")
-        cursor.execute("""
-            INSERT INTO pengguna (username, password, email, role) 
-            VALUES ('admin', ?, 'admin@toko.com', 'admin')
-        """, (password_admin_hashed,))
-        conn.commit()
-        
     conn.close()
 
 # ==============================================================================
-# FUNGSI KELOLA PENGGUNA (SINKRON DENGAN TABEL 'PENGGUNA')
+# FUNGSI KELOLA PENGGUNA
 # ==============================================================================
 def load_users():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    # PERBAIKAN: Diselaraskan menembak tabel 'pengguna', bukan 'users'
-    cursor.execute("SELECT username, password, role FROM pengguna")
+    cursor.execute("SELECT username, password, email, role FROM pengguna")
     rows = cursor.fetchall()
     conn.close()
-    return {row[0]: {"password": row[1], "role": row[2]} for row in rows}
+    return {row[0]: {"password": row[1], "email": row[2], "role": row[3]} for row in rows}
 
 def save_users(users_dict):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     for username, data in users_dict.items():
-        # PERBAIKAN: Diselaraskan memasukkan data ke tabel 'pengguna', bukan 'users'
-        cursor.execute("INSERT OR REPLACE INTO pengguna (username, password, role) VALUES (?, ?, ?)", 
-                       (username, data["password"], data["role"]))
+        cursor.execute("""
+            INSERT OR REPLACE INTO pengguna (username, password, email, role) 
+            VALUES (?, ?, ?, ?)
+        """, (username, data["password"], data.get("email", ""), data["role"]))
     conn.commit()
     conn.close()
 
