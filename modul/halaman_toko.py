@@ -77,7 +77,7 @@ def render_belanja():
 
         col_foto, col_detail = st.columns([1, 2])
         with col_foto:
-            st.image(item["foto"] if item.get("foto") and os.path.exists(item["foto"]) else "https://via.placeholder.com/150?text=No+Image", use_container_width=True)
+            st.image(item["foto"] if item.get("foto") and os.path.exists(item["foto"]) else "https://via.placeholder.com/150?text=No+Image", width=200)
 
         with col_detail:
             st.write(f"### {item['nama']}")
