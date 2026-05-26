@@ -26,7 +26,20 @@ if not st.session_state.login:
     elif menu == "Login": render_login()
 else:
     st.sidebar.write(f"Logged in as: **{st.session_state.username}** ({st.session_state.role})")
-    list_menu = ["Belanja", "Keranjang & Checkout", "Riwayat Belanja"]
+    
+    # ==========================================================================
+    # LOGIKA BARU: HITUNG BADGE TOTAL ITEM DI KERANJANG SECARA REAL-TIME
+    # ==========================================================================
+    total_item = sum(item["jumlah"] for item in st.session_state.keranjang)
+    
+    if total_item > 0:
+        nama_menu_keranjang = f"Keranjang & Checkout ( {total_item} )"
+    else:
+        nama_menu_keranjang = "Keranjang & Checkout"
+    # ==========================================================================
+    
+    # Masukkan variabel nama_menu_keranjang ke dalam list navigasi
+    list_menu = ["Belanja", nama_menu_keranjang, "Riwayat Belanja"]
     if st.session_state.role == "admin": list_menu.append("Admin Panel")
         
     menu = st.sidebar.radio("Pilih Halaman", list_menu)
@@ -38,7 +51,12 @@ else:
         st.session_state.keranjang = [] 
         st.rerun()
 
-    if menu == "Belanja": render_belanja()
-    elif menu == "Keranjang & Checkout": render_keranjang()
-    elif menu == "Riwayat Belanja": render_riwayat() 
-    elif menu == "Admin Panel" and st.session_state.role == "admin": render_admin()
+    # Pengecekan halaman diselaraskan dengan variabel menu dinamis tadi
+    if menu == "Belanja": 
+        render_belanja()
+    elif menu == nama_menu_keranjang: # 👈 Menggunakan variabel agar tidak pecah/eror
+        render_keranjang()
+    elif menu == "Riwayat Belanja": 
+        render_riwayat() 
+    elif menu == "Admin Panel" and st.session_state.role == "admin": 
+        render_admin()
