@@ -2,10 +2,68 @@ import streamlit as st
 import os
 import json
 import sqlite3
-from modul.database import DB_NAME, save_produk
+import requests
+from modul.database import DB_NAME, save_produk, save_transaksi
 
+# ==============================================================================
+# FUNGSI INTEGRASI API MIDTRANS SANDBOX
+# ==============================================================================
+def buat_link_midtrans(order_id, total_harga, username):
+    url = "https://app.sandbox.midtrans.com/snap/v1/transactions"
+    
+    # Midtrans butuh otentikasi menggunakan Server Key dengan format Basic Auth
+    server_key = st.secrets["midtrans"]["SERVER_KEY"]
+    
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "transaction_details": {
+            "order_id": f"NOTA-{order_id}",
+            "gross_amount": int(total_harga)
+        },
+        "customer_details": {
+            "first_name": username
+        },
+        "expiry": {
+            "duration": 15,
+            "unit": "minutes"
+        }
+    }
+    
+    try:
+        # Mengirim request ke Midtrans menggunakan auth=(server_key, "")
+        response = requests.post(url, json=payload, headers=headers, auth=(server_key, ""))
+        data = response.json()
+        return data.get("redirect_url") # Mengembalikan link halaman pembayaran
+    except Exception as e:
+        st.error(f"Gagal terhubung ke Midtrans: {e}")
+        return None
+
+def cek_status_midtrans(order_id):
+    url = f"https://api.sandbox.midtrans.com/v2/NOTA-{order_id}/status"
+    server_key = st.secrets["midtrans"]["SERVER_KEY"]
+    
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, auth=(server_key, ""))
+        data = response.json()
+        # Mengembalikan status transaksi dari Midtrans (settlement = lunas)
+        return data.get("transaction_status")
+    except:
+        return None
+
+# ==============================================================================
+# HALAMAN KATALOG BELANJA
+# ==============================================================================
 def render_belanja():
-    st.title("🛒 Toko Online Saya")
+    st.title("🛒 Toko Online Sinar")
     search_query = st.text_input("🔍 Cari produk...", placeholder="Ketik nama produk di sini...")
     
     produk_ditampilkan = [p for p in st.session_state.produk if search_query.lower() in p["nama"].lower()] if search_query else st.session_state.produk
@@ -42,6 +100,9 @@ def render_belanja():
                 st.warning("Stok Penuh/Habis")
         st.divider()
 
+# ==============================================================================
+# HALAMAN KERANJANG & CHECKOUT
+# ==============================================================================
 def render_keranjang():
     st.title("🛍️ Keranjang Belanja Anda")
 
@@ -109,14 +170,40 @@ def render_keranjang():
                     if p["nama"] == k_item["nama"]:
                         p["stok"] -= k_item["jumlah"]
             
-            from modul.database import save_transaksi
             save_produk(st.session_state.produk)
+            
+            # 1. Simpan pesanan dulu ke database lokal
             save_transaksi(st.session_state.username, st.session_state.keranjang, total_akhir)
-            st.session_state.keranjang = []
-            st.success("Checkout Berhasil! Silakan cek menu 'Riwayat Belanja' untuk instruksi pembayaran.")
-            st.balloons()
-            st.rerun()
+            
+            # 2. Ambit ID Transaksi terakhir yang barusan dibuat
+            conn = sqlite3.connect(DB_NAME)
+            cursor = conn.cursor()
+            cursor.execute("SELECT max(id) FROM transaksi WHERE username = ?", (st.session_state.username,))
+            id_nota_terakhir = cursor.fetchone()[0]
+            conn.close()
+            
+            # 3. Mintakan link pembayaran otomatis ke Midtrans
+            st.info("Menghubungkan ke gerbang pembayaran Midtrans...")
+            link_pembayaran = buat_link_midtrans(id_nota_terakhir, total_akhir, st.session_state.username)
+            
+            if link_pembayaran:
+                # 4. Simpan link pembayaran tersebut ke kolom bukti_transfer
+                conn = sqlite3.connect(DB_NAME)
+                cursor = conn.cursor()
+                cursor.execute("UPDATE transaksi SET bukti_transfer = ? WHERE id = ?", (link_pembayaran, id_nota_terakhir))
+                conn.commit()
+                conn.close()
+                
+                st.session_state.keranjang = []
+                st.success("Checkout Berhasil! Link Pembayaran Otomatis telah dibuat.")
+                st.balloons()
+                st.rerun()
+            else:
+                st.error("Gagal membuat link pembayaran, silakan hubungi admin.")
 
+# ==============================================================================
+# HALAMAN RIWAYAT BELANJA (OTOMATIS)
+# ==============================================================================
 def render_riwayat():
     st.title("📜 Riwayat Belanja & Pembayaran")
     
@@ -134,8 +221,8 @@ def render_riwayat():
         return
 
     for nota in daftar_transaksi:
-        nota_id, tanggal, items_json, total_bayar, status, bukti_foto = nota
-        status_tampilan = f"🔴 {status}" if status == "Belum Bayar" else f"🟡 {status}" if status == "Menunggu Verifikasi" else f"🟢 {status}"
+        nota_id, tanggal, items_json, total_bayar, status, link_midtrans = nota
+        status_tampilan = f"🔴 {status}" if status == "Belum Bayar" else f"🟢 {status}"
 
         with st.expander(f"Nota #{nota_id} - {tanggal} | {status_tampilan}"):
             st.write("### Detail Barang:")
@@ -146,30 +233,28 @@ def render_riwayat():
             st.divider()
 
             if status == "Belum Bayar":
-                st.info("**Transfer Ke Rekening:**\n* **Bank BCA:** 123-456-7890 (a.n Toko Bestie)\n* **Dana/Gopay:** 0812-3456-7890")
-                upload_bukti = st.file_uploader(f"Unggah Struk Transfer Nota #{nota_id}", type=["jpg", "jpeg", "png"], key=f"up_{nota_id}")
+                st.warning("Silakan selesaikan pembayaran otomatis Anda melalui tombol di bawah:")
                 
-                if st.button(f"Konfirmasi Pembayaran #{nota_id}", key=f"btn_{nota_id}", type="primary"):
-                    if upload_bukti is not None:
-                        if not os.path.exists("bukti_bayar"):
-                            os.makedirs("bukti_bayar")
-                        ext = upload_bukti.name.split(".")[-1]
-                        path_simpan_bukti = f"bukti_bayar/nota_{nota_id}.{ext}"
-                        with open(path_simpan_bukti, "wb") as f:
-                            f.write(upload_bukti.getbuffer())
-                        
+                # Tombol mengarah langsung ke gerbang pembayaran Midtrans Snap PopUp
+                if link_midtrans:
+                    st.link_button("💳 Bayar Otomatis Sekarang", url=link_midtrans, type="primary")
+                
+                st.write("")
+                # Tombol Cek Status untuk mengecek apakah pembeli sudah bayar di simulator
+                if st.button("🔄 Cek Status Pembayaran", key=f"cek_{nota_id}"):
+                    status_terbaru = cek_status_midtrans(nota_id)
+                    
+                    if status_terbaru in ["settlement", "capture"]:
+                        # Jika di simulator sukses dibayar, ubah database kita jadi Lunas!
                         conn = sqlite3.connect(DB_NAME)
                         cursor = conn.cursor()
-                        cursor.execute("UPDATE transaksi SET status = 'Menunggu Verifikasi', bukti_transfer = ? WHERE id = ?", (path_simpan_bukti, nota_id))
+                        cursor.execute("UPDATE transaksi SET status = 'Lunas / Diproses' WHERE id = ?", (nota_id,))
                         conn.commit()
                         conn.close()
-                        st.success("Bukti transfer terkirim!")
+                        st.success("🎉 Pembayaran Anda berhasil terverifikasi otomatis oleh sistem! Pesanan diproses.")
                         st.rerun()
                     else:
-                        st.error("Silakan unggah foto struk terlebih dahulu!")
-            elif status == "Menunggu Verifikasi":
-                st.warning("Sedang diverifikasi oleh admin.")
-                if bukti_foto and os.path.exists(bukti_foto):
-                    st.image(bukti_foto, width=250)
+                        st.error("Sistem belum mendeteksi adanya pembayaran. Silakan bayar terlebih dahulu di Simulator.")
+                        
             elif status == "Lunas / Diproses":
-                st.success("🎉 Pembayaran Sah! Barang dikemas.")
+                st.success("🎉 Pembayaran SAH & LUNAS! Barang Anda sedang dikemas oleh admin.")
