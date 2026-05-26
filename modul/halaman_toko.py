@@ -12,7 +12,7 @@ from modul.database import DB_NAME, save_produk, save_transaksi, buat_invoice_pd
 # 1. FUNGSI INTEGRASI API MIDTRANS (VERSI SANDBOX OPTIMIZED)
 # ==============================================================================
 def buat_link_midtrans(order_id, total_harga, username):
-    # 🌟 KEMBALIKAN KE SANDBOX karena akunmu terdaftar di sistem uji coba
+    # 🌟 Wajib gunakan sandbox karena tipe akunmu di dashboard adalah Sandbox murni
     url = "https://app.sandbox.midtrans.com/snap/v1/transactions"
     
     server_key = st.secrets["midtrans"]["SERVER_KEY"]
