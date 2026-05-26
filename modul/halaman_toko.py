@@ -13,9 +13,7 @@ from modul.database import DB_NAME, save_produk, save_transaksi, buat_invoice_pd
 # ==============================================================================
 def buat_link_midtrans(order_id, total_harga, username):
     url = "https://app.sandbox.midtrans.com/snap/v1/transactions"
-    
-    server_key = st.secrets["midtrans"]["SERVER_KEY"]
-    server_key = server_key.strip() 
+    server_key = st.secrets["midtrans"]["SERVER_KEY"].strip()
     
     auth_string = f"{server_key}:"
     auth_encoded = base64.b64encode(auth_string.encode("utf-8")).decode("utf-8")
@@ -29,54 +27,20 @@ def buat_link_midtrans(order_id, total_harga, username):
     unique_order_id = f"NOTA-{order_id}-{int(time.time())}"
     
     payload = {
-        "transaction_details": {
-            "order_id": unique_order_id,
-            "gross_amount": int(total_harga)
-        },
-        "customer_details": {
-            "first_name": username
-        },
-        "expiry": {
-            "duration": 15,
-            "unit": "minutes"
-        }
+        "transaction_details": {"order_id": unique_order_id, "gross_amount": int(total_harga)},
+        "customer_details": {"first_name": username},
+        "expiry": {"duration": 15, "unit": "minutes"}
     }
     
     try:
         response = requests.post(url, json=payload, headers=headers)
         data = response.json()
-        
         if "error_messages" in data:
             st.error(f"Ditolak Midtrans: {data['error_messages']}")
             return None
-            
         return data.get("redirect_url")
     except Exception as e:
         st.error(f"Gagal terhubung ke Midtrans: {e}")
-        return None
-
-# ==============================================================================
-# 2. FUNGSI CEK STATUS PEMBAYARAN MIDTRANS
-# ==============================================================================
-def cek_status_midtrans(order_id):
-    url = f"https://api.sandbox.midtrans.com/v2/NOTA-{order_id}/status"
-    server_key = st.secrets["midtrans"]["SERVER_KEY"]
-    server_key = server_key.strip()
-    
-    auth_string = f"{server_key}:"
-    auth_encoded = base64.b64encode(auth_string.encode("utf-8")).decode("utf-8")
-    
-    headers = {
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-        "Authorization": f"Basic {auth_encoded}"
-    }
-    
-    try:
-        response = requests.get(url, headers=headers)
-        data = response.json()
-        return data.get("transaction_status")
-    except:
         return None
 
 # ==============================================================================
@@ -85,7 +49,6 @@ def cek_status_midtrans(order_id):
 def render_belanja():
     st.title("🛒 Toko Online Sinar")
     search_query = st.text_input("🔍 Cari produk...", placeholder="Ketik nama produk di sini...")
-    
     produk_ditampilkan = [p for p in st.session_state.produk if search_query.lower() in p["nama"].lower()] if search_query else st.session_state.produk
 
     if not produk_ditampilkan:
@@ -97,279 +60,110 @@ def render_belanja():
         stok_tampilan = item["stok"] - jumlah_di_keranjang
 
         url_foto = item.get("foto", "")
-        if url_foto.startswith("http://") or url_foto.startswith("https://"):
-            foto_tampilan = url_foto
-        elif url_foto and os.path.exists(url_foto):
-            foto_tampilan = url_foto
-        else:
-            foto_tampilan = "https://via.placeholder.com/150?text=No+Image"
+        foto_tampilan = url_foto if url_foto.startswith("http") or os.path.exists(url_foto) else "https://via.placeholder.com/150?text=No+Image"
 
         col_foto, col_detail = st.columns([1, 2])
         with col_foto:
             st.image(foto_tampilan, width=200)
-
         with col_detail:
             st.write(f"### {item['nama']}")
             st.write(f"Harga: **Rp {item['harga']:,}** | Stok Total: {item['stok']} *(Tersedia: {stok_tampilan} pcs)*")
             clean_key = "".join(x for x in item["nama"] if x.isalnum())
 
             if stok_tampilan > 0:
-                col_counter, col_tombol = st.columns([1, 2])
-                
-                with col_counter:
-                    qty_dipilih = st.number_input(
-                        "Jumlah",
-                        min_value=1,
-                        max_value=int(stok_tampilan),
-                        value=1,
-                        step=1,
-                        key=f"qty_{clean_key}"
-                    )
-                
-                with col_tombol:
-                    st.write("") 
-                    st.write("") 
-                    if st.button(f"🛒 Masukkan ({qty_dipilih} Pcs)", key=f"beli_{clean_key}", type="primary"):
-                        ada_di_keranjang = False
-                        for k_item in st.session_state.keranjang:
-                            if k_item["nama"] == item["nama"]:
-                                k_item["jumlah"] += int(qty_dipilih)
-                                ada_di_keranjang = True
-                                break
-                        
-                        if not ada_di_keranjang:
-                            st.session_state.keranjang.append({
-                                "nama": item["nama"], 
-                                "harga": item["harga"], 
-                                "jumlah": int(qty_dipilih)
-                            })
-                        st.toast(f"✅ {qty_dipilih} Pcs {item['nama']} berhasil dimasukkan ke keranjang!")
-                        st.rerun()
+                qty_dipilih = st.number_input("Jumlah", min_value=1, max_value=int(stok_tampilan), value=1, step=1, key=f"qty_{clean_key}")
+                if st.button(f"🛒 Masukkan ({qty_dipilih} Pcs)", key=f"beli_{clean_key}", type="primary"):
+                    ada = False
+                    for k_item in st.session_state.keranjang:
+                        if k_item["nama"] == item["nama"]:
+                            k_item["jumlah"] += int(qty_dipilih)
+                            ada = True
+                            break
+                    if not ada:
+                        st.session_state.keranjang.append({"nama": item["nama"], "harga": item["harga"], "jumlah": int(qty_dipilih)})
+                    st.toast(f"✅ {qty_dipilih} Pcs {item['nama']} berhasil dimasukkan!")
+                    st.rerun()
             else:
-                st.warning("🔒 Maaf, Stok Produk Habis / Sudah Penuh di Keranjang")
+                st.warning("🔒 Stok Habis")
         st.divider()
 
 # ==============================================================================
-# 4. HALAMAN KERANJANG & CHECKOUT (DENGAN FORM ALAMAT & EKSPEDISI)
+# 4. HALAMAN KERANJANG & CHECKOUT
 # ==============================================================================
 def render_keranjang():
     st.title("🛍️ Keranjang Belanja Anda")
-
-    if len(st.session_state.keranjang) == 0:
+    if not st.session_state.keranjang:
         st.info("Keranjang Anda masih kosong.")
         return
 
     total = 0
-    col_h1, col_h2, col_h3, col_h4 = st.columns([3, 1, 1, 2])
-    col_h1.write("**Nama Barang**")
-    col_h2.write("**Aksi**")
-    col_h3.write("**Qty**")
-    col_h4.write("**Subtotal**")
-    st.divider()
+    for item in st.session_state.keranjang:
+        total += (item["harga"] * item["jumlah"])
 
-    for index, item in enumerate(list(st.session_state.keranjang)):
-        col1, col2, col3, col4 = st.columns([3, 1, 1, 2])
-        stok_asli_gudang = next((p["stok"] for p in st.session_state.produk if p["nama"] == item["nama"]), 0)
-
-        with col1:
-            st.write(item["nama"])
-            st.caption(f"Harga: Rp {item['harga']:,}")
-        with col2:
-            if st.button("➖", key=f"minus_{index}"):
-                if item["jumlah"] > 1:
-                    item["jumlah"] -= 1
-                else:
-                    st.session_state.keranjang.pop(index)
-                st.rerun()
-        with col3:
-            st.write(f"**{item['jumlah']}**")
-
-        subtotal = item["harga"] * item["jumlah"]
-        total += subtotal
-
-        with col4:
-            st.write(f"Rp {subtotal:,}")
-            if st.button("➕", key=f"plus_{index}"):
-                if item["jumlah"] < stok_asli_gudang:
-                    item["jumlah"] += 1
-                    st.rerun()
-                else:
-                    st.error("Stok gudang tidak mencukupi!")
-        st.divider()
-
-    # Hitung Diskon Produk Barang
-    diskon = total * 0.1 if total >= 200000 else 0
-    total_setelah_diskon = total - diskon
-
-    # ==============================================================================
-    # 🌟 FORM LOGISTIK BARU: ALAMAT & PILIHAN JASA PENGIRIMAN
-    # ==============================================================================
-    st.write("### 🚚 Informasi Pengiriman Paket")
+    st.write(f"### Total Harga Barang: Rp {total:,}")
     
-    # Input Alamat Tujuan Rumah
-    alamat_kirim = st.text_area(
-        "📍 Alamat Lengkap Pengiriman", 
-        placeholder="Ketik nama jalan, nomor rumah, RT/RW, kecamatan, kota, dan kode pos...",
-        key="checkout_alamat_kirim"
-    )
+    st.write("---")
+    st.write("### 🚚 Informasi Pengiriman")
+    alamat_kirim = st.text_area("📍 Alamat Lengkap Pengiriman", placeholder="Contoh: Jl. Sinar No. 1, Jakarta...")
     
-    # Dropdown Pilihan Jasa Ekspedisi beserta Tarif Ongkir Tiruan
     opsi_kurir = {
         "J&T Express (Regular) — Rp 15,000": {"nama": "J&T Express", "ongkir": 15000},
-        "JNE Reguler — Rp 18,000": {"nama": "JNE Reguler", "ongkir": 18000},
-        "SiCepat Reguler — Rp 14,000": {"nama": "SiCepat Reguler", "ongkir": 14000},
-        "Ambil Sendiri di Toko Sinar — Rp 0": {"nama": "Ambil di Toko", "ongkir": 0}
+        "GoSend Sameday — Rp 20,000": {"nama": "GoSend Sameday", "ongkir": 20000},
+        "GoSend Instant — Rp 35,000": {"nama": "GoSend Instant", "ongkir": 35000},
+        "Ambil di Toko — Rp 0": {"nama": "Ambil di Toko", "ongkir": 0}
     }
     
-    kurir_terpilih_label = st.selectbox("📦 Pilih Jasa Pengiriman", options=list(opsi_kurir.keys()), key="checkout_pilih_kurir")
-    data_kurir = opsi_kurir[kurir_terpilih_label]
+    pilihan = st.selectbox("📦 Pilih Jasa Pengiriman", options=list(opsi_kurir.keys()))
+    data_kurir = opsi_kurir[pilihan]
     
-    ongkir = data_kurir["ongkir"]
-    total_akhir = total_setelah_diskon + ongkir
-
-    # Tampilan Rincian Biaya Nota
-    st.divider()
-    st.write(f"### Total Kotor Barang: Rp {total:,}")
-    if diskon > 0:
-        st.write(f"### 🔥 Diskon Promo (10%): -Rp {int(diskon):,}")
-    st.write(f"### 🚚 Ongkos Kirim: Rp {ongkir:,}")
+    total_akhir = total - (total * 0.1 if total >= 200000 else 0) + data_kurir["ongkir"]
     st.write(f"## Total Akhir Pembayaran: Rp {int(total_akhir):,}")
 
     if st.button("Selesaikan Pembayaran (Checkout)", type="primary"):
         if not alamat_kirim:
-            st.error("Gagal! Alamat pengiriman wajib diisi terlebih dahulu agar kurir tidak tersesat.")
+            st.error("Alamat wajib diisi!")
             return
-
-        gagal_checkout = False
-        for k_item in st.session_state.keranjang:
-            for p in st.session_state.produk:
-                if p["nama"] == k_item["nama"] and p["stok"] < k_item["jumlah"]:
-                    gagal_checkout = True
-                    st.error(f"Maaf, stok {p['nama']} tiba-tiba habis.")
+            
+        save_produk(st.session_state.produk)
+        save_transaksi(st.session_state.username, st.session_state.keranjang, total_akhir)
         
-        if not gagal_checkout:
-            for k_item in st.session_state.keranjang:
-                for p in st.session_state.produk:
-                    if p["nama"] == k_item["nama"]:
-                        p["stok"] -= k_item["jumlah"]
-            
-            save_produk(st.session_state.produk)
-            save_transaksi(st.session_state.username, st.session_state.keranjang, total_akhir)
-            
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute("SELECT max(id) FROM transaksi WHERE username = ?", (st.session_state.username,))
+        id_nota = cursor.fetchone()[0]
+        cursor.execute("UPDATE transaksi SET kurir = ? WHERE id = ?", (f"{data_kurir['nama']} | {alamat_kirim}", id_nota))
+        conn.commit()
+        conn.close()
+        
+        link = buat_link_midtrans(id_nota, total_akhir, st.session_state.username)
+        if link:
             conn = sqlite3.connect(DB_NAME)
             cursor = conn.cursor()
-            cursor.execute("SELECT max(id) FROM transaksi WHERE username = ?", (st.session_state.username,))
-            id_nota_terakhir = cursor.fetchone()[0]
-            
-            # 🌟 MODIFIKASI CERDAS: Masukkan nama kurir pilihan + Alamat lengkap ke kolom 'kurir' di database
-            # Supaya admin bisa langsung baca info lengkapnya saat packing barang!
-            info_logistik_lengkap = f"{data_kurir['nama']} | Alamat: {alamat_kirim}"
-            cursor.execute("UPDATE transaksi SET kurir = ? WHERE id = ?", (info_logistik_lengkap, id_nota_terakhir))
+            cursor.execute("UPDATE transaksi SET bukti_transfer = ? WHERE id = ?", (link, id_nota))
             conn.commit()
             conn.close()
-            
-            st.info("Menghubungkan ke gerbang pembayaran Midtrans...")
-            link_pembayaran = buat_link_midtrans(id_nota_terakhir, total_akhir, st.session_state.username)
-            
-            if link_pembayaran:
-                conn = sqlite3.connect(DB_NAME)
-                cursor = conn.cursor()
-                cursor.execute("UPDATE transaksi SET bukti_transfer = ? WHERE id = ?", (link_pembayaran, id_nota_terakhir))
-                conn.commit()
-                conn.close()
-                
-                # Kosongkan keranjang belanja
-                st.session_state.keranjang = []
-                
-                st.success("🎉 Checkout Berhasil! Nota pesananmu telah dibuat.")
-                st.balloons()
-                
-                st.link_button("💳 KLIK DI SINI UNTUK BAYAR SEKARANG", link_pembayaran, type="primary", use_container_width=True)
-                st.info("💡 *Jika belum ingin membayar sekarang, kamu bisa melihat kembali link ini di menu 'Riwayat Belanja'.*")
-            else:
-                st.error("Gagal membuat link pembayaran, silakan hubungi admin.")
+            st.session_state.keranjang = []
+            st.success("Checkout Berhasil!")
+            st.link_button("💳 BAYAR SEKARANG", link, type="primary", use_container_width=True)
+        else:
+            st.error("Gagal membuat link pembayaran.")
 
 # ==============================================================================
 # 5. HALAMAN RIWAYAT BELANJA
 # ==============================================================================
 def render_riwayat():
     st.title("📜 Riwayat Belanja Kamu")
-    username = st.session_state.get("username")
-    
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute("""
-        SELECT id, total_bayar, tanggal, status, kurir, no_resi 
-        FROM transaksi 
-        WHERE username = ? 
-        ORDER BY id DESC
-    """, (username,))
-    daftar_transaksi = cursor.fetchall()
-    conn.close()
-    
-    if not daftar_transaksi:
-        st.info("🛒 Kamu belum pernah melakukan transaksi apa pun.")
-        return
-        
-    for trx in daftar_transaksi:
-        trx_id, total_bayar, tanggal, status, kurir, no_resi = trx
-        
-        if status == "Belum Bayar":
-            status_badge = "🔴 **Belum Bayar**"
-        elif status in ["Diproses", "Lunas", "Lunas / Diproses"]:
-            status_badge = "🟡 **Sedang Dipacking**"
-        elif status == "Siap di-Jemput":
-            status_badge = "🔵 **Siap di-Jemput Kurir**"
-        elif status == "Dikirim":
-            status_badge = "🚚 **Dalam Pengiriman**"
-        else:
-            status_badge = "🟢 **Selesai**"
-            
-        with st.expander(f"📦 Nota #{trx_id} — {tanggal} — ({status})"):
-            st.write(f"📅 **Tanggal Transaksi:** {tanggal}")
-            st.write(f"💰 **Total Belanja (Inc. Ongkir):** Rp {int(total_bayar):,}")
-            st.write(f"📌 **Status Pesanan:** {status_badge}")
-            
+    cursor.execute("SELECT id, total_bayar, tanggal, status, kurir, no_resi FROM transaksi WHERE username = ? ORDER BY id DESC", (st.session_state.username,))
+    for trx in cursor.fetchall():
+        id_trx, total, tgl, status, kurir, resi = trx
+        with st.expander(f"📦 Nota #{id_trx} - {status}"):
+            st.write(f"📅 {tgl} | 💰 Rp {int(total):,}")
+            st.info(f"🚚 {kurir} | 🔢 Resi: {resi}")
             if status == "Belum Bayar":
-                try:
-                    conn = sqlite3.connect(DB_NAME)
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT bukti_transfer FROM transaksi WHERE id = ?", (trx_id,))
-                    saved_link = cursor.fetchone()[0]
-                    conn.close()
-                    
-                    if saved_link:
-                        st.link_button("💳 Lanjutkan Pembayaran Midtrans", saved_link, use_container_width=True)
-                except:
-                    pass
-            
-            if status in ["Siap di-Jemput", "Dikirim", "Selesai"]:
-                st.info(f"🚚 **Informasi Ekspedisi & Tujuan:**\n- Detail Logistik: `{kurir}`\n- Nomor Resi: `{no_resi}`")
-            else:
-                st.info(f"📍 **Tujuan Pengiriman:** `{kurir}`")
-            
-            st.write("🛍️ **Daftar Produk yang Dibeli:**")
-            
-            try:
-                conn = sqlite3.connect(DB_NAME)
-                cursor = conn.cursor()
-                cursor.execute("SELECT items FROM transaksi WHERE id = ?", (trx_id,))
-                items_json = cursor.fetchone()[0]
-                conn.close()
-                
-                items_list = json.loads(items_json)
-                for item in items_list:
-                    subtotal_item = item["harga"] * item["jumlah"]
-                    st.write(f"- {item['nama']} (x{item['jumlah']}) — Rp {subtotal_item:,}")
-            except Exception as e:
-                st.write("⚠️ Gagal memuat daftar produk.")
-                
-            if status == "Dikirim":
-                if st.button(f"✅ Konfirmasi Barang Diterima (#{trx_id})", key=f"btn_selesai_{trx_id}"):
-                    conn = sqlite3.connect(DB_NAME)
-                    cursor = conn.cursor()
-                    cursor.execute("UPDATE transaksi SET status = 'Selesai' WHERE id = ?", (trx_id,))
-                    conn.commit()
-                    conn.close()
-                    st.success("Terima kasih sudah berbelanja di Toko Sinar! ❤️")
-                    st.rerun()
+                conn2 = sqlite3.connect(DB_NAME)
+                link = conn2.execute("SELECT bukti_transfer FROM transaksi WHERE id=?", (id_trx,)).fetchone()[0]
+                conn2.close()
+                st.link_button("💳 Lanjutkan Pembayaran", link, use_container_width=True)
+    conn.close()
