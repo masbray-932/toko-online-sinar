@@ -1,20 +1,24 @@
 import streamlit as st
 import sqlite3
+import hashlib # 🌟 Murni bawaan python, anti-bentrok/anti-eror
 from modul.database import init_db, load_produk, DB_NAME
-from modul.keamanan import hash_password
 from modul.halaman_auth import render_login, render_register, render_lupa_password
 from modul.halaman_toko import render_belanja, render_keranjang, render_riwayat
 from modul.halaman_admin import render_admin
 
+# 🌟 FUNGSI BAYANGAN: Membuat fungsi hash mandiri agar bebas dari impor modul keamanan
+def hash_password_mandiri(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
 # 1. Jalankan Inisialisasi Database
 init_db()
 
-# 🌟 FITUR AMAN: Buat akun admin otomatis langsung di app.py agar bebas Circular Import
+# 👑 BUAT AKUN ADMIN OTOMATIS (Aman, menggunakan fungsi hash mandiri)
 conn = sqlite3.connect(DB_NAME)
 cursor = conn.cursor()
 cursor.execute("SELECT username FROM pengguna WHERE username = 'admin'")
 if not cursor.fetchone():
-    password_admin_hashed = hash_password("admin123")
+    password_admin_hashed = hash_password_mandiri("admin123") # 👈 Menggunakan fungsi mandiri
     cursor.execute("""
         INSERT INTO pengguna (username, password, email, role) 
         VALUES ('admin', ?, 'admin@toko.com', 'admin')
