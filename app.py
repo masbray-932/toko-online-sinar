@@ -13,7 +13,7 @@ if "otp_step" not in st.session_state: st.session_state.otp_step = 1
 if "generated_otp" not in st.session_state: st.session_state.generated_otp = ""
 if "temp_user_data" not in st.session_state: st.session_state.temp_user_data = {}
 
-# State untuk melacak halaman auth mana yang sedang aktif di halaman utama
+# State navigasi utama halaman login/register/lupa password
 if "auth_page" not in st.session_state: st.session_state.auth_page = "Login"
 
 if "produk" not in st.session_state:
@@ -22,10 +22,10 @@ if "keranjang" not in st.session_state:
     st.session_state.keranjang = []
 
 # ==============================================================================
-# ALUR NAVIGASI UTAMA
+# ALUR TAMPILAN HALAMAN
 # ==============================================================================
 if not st.session_state.login:
-    # Jika belum login, sidebar dikosongkan total (Navigasi pindah ke halaman utama)
+    # Kontrol penuh navigasi dipindahkan langsung ke halaman utama
     if st.session_state.auth_page == "Login":
         render_login()
     elif st.session_state.auth_page == "Register":
@@ -33,11 +33,10 @@ if not st.session_state.login:
     elif st.session_state.auth_page == "Lupa Password":
         render_lupa_password()
 else:
-    # Jika sudah login, judul Navigation dan menu baru dimunculkan di sidebar
+    # Navigasi sidebar baru akan muncul setelah user berhasil login
     st.sidebar.title("Navigation")
     st.sidebar.write(f"Logged in as: **{st.session_state.username}** ({st.session_state.role})")
     
-    # Hitung badge total item di keranjang secara real-time
     total_item = sum(item["jumlah"] for item in st.session_state.keranjang)
     if total_item > 0:
         nama_menu_keranjang = f"Keranjang & Checkout ( {total_item} )"
@@ -57,7 +56,6 @@ else:
         st.session_state.keranjang = [] 
         st.rerun()
 
-    # Logika penampilan halaman setelah login
     if menu == "Belanja": 
         render_belanja()
     elif menu == nama_menu_keranjang: 
