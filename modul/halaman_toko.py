@@ -12,13 +12,11 @@ from modul.database import DB_NAME, save_produk, save_transaksi, buat_invoice_pd
 # 1. FUNGSI INTEGRASI API MIDTRANS (VERSI SANDBOX OPTIMIZED)
 # ==============================================================================
 def buat_link_midtrans(order_id, total_harga, username):
-    # 🌟 Wajib gunakan sandbox karena tipe akunmu di dashboard adalah Sandbox murni
     url = "https://app.sandbox.midtrans.com/snap/v1/transactions"
     
     server_key = st.secrets["midtrans"]["SERVER_KEY"]
     server_key = server_key.strip() # Bersihkan spasi gaib
     
-    # Proses Enkripsi Basic Auth yang presisi
     auth_string = f"{server_key}:"
     auth_encoded = base64.b64encode(auth_string.encode("utf-8")).decode("utf-8")
     
@@ -61,7 +59,6 @@ def buat_link_midtrans(order_id, total_harga, username):
 # 2. FUNGSI CEK STATUS PEMBAYARAN MIDTRANS
 # ==============================================================================
 def cek_status_midtrans(order_id):
-    # 🌟 KEMBALIKAN KE API SANDBOX
     url = f"https://api.sandbox.midtrans.com/v2/NOTA-{order_id}/status"
     server_key = st.secrets["midtrans"]["SERVER_KEY"]
     server_key = server_key.strip()
@@ -99,7 +96,6 @@ def render_belanja():
         jumlah_di_keranjang = sum(k["jumlah"] for k in st.session_state.keranjang if k["nama"] == item["nama"])
         stok_tampilan = item["stok"] - jumlah_di_keranjang
 
-        # Pemilihan gambar (Lokal vs Internet)
         url_foto = item.get("foto", "")
         if url_foto.startswith("http://") or url_foto.startswith("https://"):
             foto_tampilan = url_foto
@@ -154,7 +150,7 @@ def render_belanja():
         st.divider()
 
 # ==============================================================================
-# 4. HALAMAN KERANJANG & CHECKOUT
+# 4. HALAMAN KERANJANG & CHECKOUT (REVISI TOMBOL LINK AKTIF)
 # ==============================================================================
 def render_keranjang():
     st.title("🛍️ Keranjang Belanja Anda")
@@ -242,10 +238,15 @@ def render_keranjang():
                 conn.commit()
                 conn.close()
                 
+                # Kosongkan keranjang belanja
                 st.session_state.keranjang = []
-                st.success("Checkout Berhasil! Link Pembayaran Otomatis telah dibuat.")
+                
+                st.success("🎉 Checkout Berhasil! Nota pesananmu telah dibuat.")
                 st.balloons()
-                st.rerun()
+                
+                # 🌟 SOLUSI JITU: Tampilkan tombol besar untuk langsung lari ke Midtrans
+                st.link_button("💳 KLIK DI SINI UNTUK BAYAR SEKARANG", link_pembayaran, type="primary", use_container_width=True)
+                st.info("💡 *Jika belum ingin membayar sekarang, kamu bisa melihat kembali link ini di menu 'Riwayat Belanja'.*")
             else:
                 st.error("Gagal membuat link pembayaran, silakan hubungi admin.")
 
@@ -289,6 +290,20 @@ def render_riwayat():
             st.write(f"📅 **Tanggal Transaksi:** {tanggal}")
             st.write(f"💰 **Total Belanja:** Rp {int(total_bayar):,}")
             st.write(f"📌 **Status Pesanan:** {status_badge}")
+            
+            # 🌟 TOMBOL BAYAR CADANGAN: Ditampilkan kalau statusnya masih Belum Bayar
+            if status == "Belum Bayar":
+                try:
+                    conn = sqlite3.connect(DB_NAME)
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT bukti_transfer FROM transaksi WHERE id = ?", (trx_id,))
+                    saved_link = cursor.fetchone()[0]
+                    conn.close()
+                    
+                    if saved_link:
+                        st.link_button("💳 Lanjutkan Pembayaran Midtrans", saved_link, use_container_width=True)
+                except:
+                    pass
             
             if status in ["Siap di-Jemput", "Dikirim", "Selesai"]:
                 st.info(f"🚚 **Informasi Ekspedisi:**\n- Jasa Pengiriman: `{kurir}`\n- Nomor Resi: `{no_resi}`")
