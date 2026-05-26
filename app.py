@@ -23,16 +23,17 @@ if "keranjang" not in st.session_state:
 
 st.sidebar.title("Navigation")
 
+# KODE BARU (Navigasi dikendalikan lewat halaman utama):
 if not st.session_state.login:
-    # Tambahkan opsi "Lupa Password" ke dalam selectbox
-    menu = st.sidebar.selectbox("Menu Auth", ["Login", "Register", "Lupa Password"])
-    
-    if menu == "Register": 
-        render_register()
-    elif menu == "Login": 
+    # Kita buat session state baru untuk melacak halaman auth mana yang aktif
+    if "auth_page" not in st.session_state:
+        st.session_state.auth_page = "Login"
+        
+    if st.session_state.auth_page == "Login":
         render_login()
-    elif menu == "Lupa Password": 
-        from modul.halaman_auth import render_lupa_password
+    elif st.session_state.auth_page == "Register":
+        render_register()
+    elif st.session_state.auth_page == "Lupa Password":
         render_lupa_password()
 else:
     st.sidebar.write(f"Logged in as: **{st.session_state.username}** ({st.session_state.role})")
