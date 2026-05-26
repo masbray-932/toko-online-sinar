@@ -1,14 +1,10 @@
 import streamlit as st
 import sqlite3
 import hashlib
-from streamlit_cookies_controller import CookieController # 🌟 TAMBAHAN: Pengendali Cookies
 from modul.database import init_db, load_produk, DB_NAME
 from modul.halaman_auth import render_login, render_register, render_lupa_password
 from modul.halaman_toko import render_belanja, render_keranjang, render_riwayat
 from modul.halaman_admin import render_admin
-
-# Inisialisasi pengontrol cookies browser
-controller = CookieController()
 
 def hash_password_mandiri(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
@@ -29,7 +25,7 @@ if not cursor.fetchone():
     conn.commit()
 conn.close()
 
-# 2. Inisialisasi Session State Dasar (Jika Belum Ada)
+# 2. Inisialisasi Session State Dasar
 if "login" not in st.session_state: st.session_state.login = False
 if "username" not in st.session_state: st.session_state.username = ""
 if "role" not in st.session_state: st.session_state.role = ""
@@ -44,31 +40,26 @@ if "keranjang" not in st.session_state:
     st.session_state.keranjang = []
 
 # ==============================================================================
-# 🌟 KEAJAIBAN ANTI-LOGOUT: Baca Cookies Saat Browser Di-refresh
+# 🌟 KEAJAIBAN ANTI-LOGOUT: Ambil Data Langsung dari Parameter URL Browser
 # ==============================================================================
-# Mengambil cookies jika sebelumnya user sudah sukses login
-saved_username = controller.get("saved_username")
-saved_role = controller.get("saved_role")
-
-if saved_username and saved_role and not st.session_state.login:
-    # Kembalikan status login yang sempat hilang akibat refresh browser
+# Jika di URL terdeteksi ada akun, langsung paksa pertahankan status loginnya!
+if "user" in st.query_params and "role" in st.query_params:
     st.session_state.login = True
-    st.session_state.username = saved_username
-    st.session_state.role = saved_role
+    st.session_state.username = st.query_params["user"]
+    st.session_state.role = st.query_params["role"]
 
 # ==============================================================================
 # ALUR TAMPILAN HALAMAN
 # ==============================================================================
 if not st.session_state.login:
     if st.session_state.auth_page == "Login":
-        # Jalankan fungsi login
         render_login()
         
-        # SENSOR PINTAR: Jika user baru saja sukses klik 'Masuk' di render_login
+        # SENSOR PINTAR: Jika login baru saja sukses di halaman render_login
         if st.session_state.login:
-            # Tanam cookies ke browser agar awet saat di-refresh (bertahan 1 hari)
-            controller.set("saved_username", st.session_state.username)
-            controller.set("saved_role", st.session_state.role)
+            # Tanam data login langsung ke dalam parameter URL browser
+            st.query_params["user"] = st.session_state.username
+            st.query_params["role"] = st.session_state.role
             st.rerun()
             
     elif st.session_state.auth_page == "Register":
@@ -88,10 +79,9 @@ else:
         
     menu = st.sidebar.radio("Pilih Halaman", list_menu)
     
-    # 🌟 TOMBOL LOGOUT: Hapus cookies total saat user sengaja klik Logout
+    # 🌟 TOMBOL LOGOUT: Bersihkan URL browser kembali menjadi normal kosong
     if st.sidebar.button("Logout"):
-        controller.remove("saved_username")
-        controller.remove("saved_role")
+        st.query_params.clear() # Hapus parameter URL total
         st.session_state.login = False
         st.session_state.username = ""
         st.session_state.role = ""
