@@ -2,7 +2,7 @@ import streamlit as st
 import sqlite3
 import random
 from modul.database import DB_NAME
-import modul.keamanan as keamanan  # Menggunakan satu impor aman untuk semua fungsi keamanan
+import modul.keamanan as keamanan 
 
 # ==============================================================================
 # FUNGSI PROSES DATABASE UNTUK LUPA PASSWORD
@@ -10,7 +10,6 @@ import modul.keamanan as keamanan  # Menggunakan satu impor aman untuk semua fun
 def update_password_lewat_email(email, password_baru):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    # Memanggil hash_password lewat alias modul keamanan
     password_hashed = keamanan.hash_password(password_baru)
     cursor.execute("UPDATE pengguna SET password = ? WHERE email = ?", (password_hashed, email))
     conn.commit()
@@ -25,13 +24,14 @@ def cek_email_terdaftar(email):
     return user is not None
 
 # ==============================================================================
-# HALAMAN LOGIN (DENGAN NAVIGASI LUPA PASSWORD)
+# HALAMAN LOGIN (TOMBOL DI HALAMAN UTAMA)
 # ==============================================================================
 def render_login():
-    st.subheader("🔑 Login Pengguna")
+    st.title("🔑 Login Pengguna")
     username = st.text_input("Username", key="login_user")
     password = st.text_input("Password", type="password", key="login_pass")
 
+    # Tombol Masuk Utama
     if st.button("Masuk", type="primary"):
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
@@ -39,7 +39,6 @@ def render_login():
         row = cursor.fetchone()
         conn.close()
 
-        # Memanggil verifikasi_password lewat alias modul keamanan
         if row and keamanan.verifikasi_password(password, row[0]):
             st.session_state.login = True
             st.session_state.username = username
@@ -48,20 +47,44 @@ def render_login():
             st.rerun()
         else:
             st.error("Username atau Password salah!")
+            
+    st.write("") # Jeda spasial kecil
+    
+    # KEAJAIBAN TATA LETAK: Kita buat 2 kolom tepat di bawah tombol Masuk
+    col_lupa, col_reg = st.columns([1, 1])
+    
+    with col_lupa:
+        # Meniru gaya text link dengan st.button biasa (tanpa border tebal pakai bantuan type)
+        if st.button("❓ Lupa Password", key="btn_to_forgot"):
+            st.session_state.auth_page = "Lupa Password"
+            st.rerun()
+            
+    with col_reg:
+        # Diposisikan di sebelah kanan halaman
+        if st.button("📝 Register Akun Baru", key="btn_to_register"):
+            st.session_state.auth_page = "Register"
+            st.rerun()
 
 # ==============================================================================
-# HALAMAN REGISTER (DENGAN OTP EMAIL)
+# HALAMAN REGISTER (DENGAN EMAIL OTP)
 # ==============================================================================
 def render_register():
-    st.subheader("📝 Daftar Akun Baru")
-    # Catatan: Jika kodingan lama registermu panjang, pastikan pasang di sini ya, bestie!
-    st.info("Fitur registrasi akun berjalan normal.")
+    st.title("📝 Daftar Akun Baru")
+    
+    # ... (Isi logika form register asli/lama kamu taruh di sini, jangan sampai hilang)
+    st.info("Form registrasi akun Anda tampil di sini.")
+    
+    st.divider()
+    # Tombol untuk kembali ke halaman utama login
+    if st.button("⬅️ Kembali ke Halaman Login", key="reg_back_login"):
+        st.session_state.auth_page = "Login"
+        st.rerun()
 
 # ==============================================================================
-# HALAMAN LUPA PASSWORD (FITUR BARU)
+# HALAMAN LUPA PASSWORD
 # ==============================================================================
 def render_lupa_password():
-    st.subheader("🔄 Reset Password Akun")
+    st.title("🔄 Reset Password Akun")
 
     # STEP 1: Masukkan Email & Kirim OTP
     if st.session_state.forgot_step == 1:
@@ -73,20 +96,18 @@ def render_lupa_password():
             elif not cek_email_terdaftar(email):
                 st.error("Email tersebut tidak terdaftar di sistem kami!")
             else:
-                # Generate 6 digit OTP
                 otp_code = str(random.randint(100000, 999999))
                 st.session_state.forgot_otp = otp_code
                 st.session_state.forgot_email = email
                 
-                # Kirim ke email user
                 st.info("Sedang mengirim OTP ke email Anda...")
                 try:
                     keamanan.kirim_otp(email, otp_code) 
-                    st.success("Kode OTP berhasil dikirim! Silakan cek kotak masuk/spam email Anda.")
+                    st.success("Kode OTP berhasil dikirim! Silakan cek email Anda.")
                     st.session_state.forgot_step = 2
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Gagal mengirim email: {e}. Pastikan settingan Secrets email benar.")
+                    st.error(f"Gagal mengirim email: {e}.")
 
     # STEP 2: Verifikasi OTP & Masukkan Password Baru
     elif st.session_state.forgot_step == 2:
@@ -103,14 +124,19 @@ def render_lupa_password():
             elif password_baru != konfirmasi_pass:
                 st.error("Konfirmasi password tidak cocok!")
             else:
-                # Proses update ke database
                 update_password_lewat_email(st.session_state.forgot_email, password_baru)
-                st.success("🎉 Password Anda berhasil diubah! Silakan pilih menu Login untuk masuk.")
+                st.success("🎉 Password berhasil diubah!")
                 
-                # Reset status langkah lupa password kembali ke awal
+                # Kembalikan state ke mode login bersih
                 st.session_state.forgot_step = 1
                 st.session_state.forgot_email = ""
                 st.session_state.forgot_otp = ""
-                
-                # Tambahan: Paksa refresh halaman agar menu kembali bersih ke menu awal
+                st.session_state.auth_page = "Login"
                 st.rerun()
+                
+    st.divider()
+    # Tombol darurat kalau pengguna tiba-tiba ingat passwordnya lagi
+    if st.button("⬅️ Batalkan, Kembali ke Login", key="forgot_back_login"):
+        st.session_state.forgot_step = 1
+        st.session_state.auth_page = "Login"
+        st.rerun()
