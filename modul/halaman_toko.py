@@ -15,7 +15,7 @@ def buat_link_midtrans(order_id, total_harga, username):
     url = "https://app.sandbox.midtrans.com/snap/v1/transactions"
     
     server_key = st.secrets["midtrans"]["SERVER_KEY"]
-    server_key = server_key.strip() # Bersihkan spasi gaib
+    server_key = server_key.strip() 
     
     auth_string = f"{server_key}:"
     auth_encoded = base64.b64encode(auth_string.encode("utf-8")).decode("utf-8")
@@ -80,7 +80,7 @@ def cek_status_midtrans(order_id):
         return None
 
 # ==============================================================================
-# 3. HALAMAN KATALOG BELANJA (VERSI INTERAKTIF QUANTITY COUNTER)
+# 3. HALAMAN KATALOG BELANJA
 # ==============================================================================
 def render_belanja():
     st.title("🛒 Toko Online Sinar")
@@ -150,7 +150,7 @@ def render_belanja():
         st.divider()
 
 # ==============================================================================
-# 4. HALAMAN KERANJANG & CHECKOUT (REVISI TOMBOL LINK AKTIF)
+# 4. HALAMAN KERANJANG & CHECKOUT (DENGAN FORM ALAMAT & EKSPEDISI)
 # ==============================================================================
 def render_keranjang():
     st.title("🛍️ Keranjang Belanja Anda")
@@ -197,15 +197,49 @@ def render_keranjang():
                     st.error("Stok gudang tidak mencukupi!")
         st.divider()
 
+    # Hitung Diskon Produk Barang
     diskon = total * 0.1 if total >= 200000 else 0
-    total_akhir = total - diskon
+    total_setelah_diskon = total - diskon
 
-    st.write(f"### Total Kotor: Rp {total:,}")
+    # ==============================================================================
+    # 🌟 FORM LOGISTIK BARU: ALAMAT & PILIHAN JASA PENGIRIMAN
+    # ==============================================================================
+    st.write("### 🚚 Informasi Pengiriman Paket")
+    
+    # Input Alamat Tujuan Rumah
+    alamat_kirim = st.text_area(
+        "📍 Alamat Lengkap Pengiriman", 
+        placeholder="Ketik nama jalan, nomor rumah, RT/RW, kecamatan, kota, dan kode pos...",
+        key="checkout_alamat_kirim"
+    )
+    
+    # Dropdown Pilihan Jasa Ekspedisi beserta Tarif Ongkir Tiruan
+    opsi_kurir = {
+        "J&T Express (Regular) — Rp 15,000": {"nama": "J&T Express", "ongkir": 15000},
+        "JNE Reguler — Rp 18,000": {"nama": "JNE Reguler", "ongkir": 18000},
+        "SiCepat Reguler — Rp 14,000": {"nama": "SiCepat Reguler", "ongkir": 14000},
+        "Ambil Sendiri di Toko Sinar — Rp 0": {"nama": "Ambil di Toko", "ongkir": 0}
+    }
+    
+    kurir_terpilih_label = st.selectbox("📦 Pilih Jasa Pengiriman", options=list(opsi_kurir.keys()), key="checkout_pilih_kurir")
+    data_kurir = opsi_kurir[kurir_terpilih_label]
+    
+    ongkir = data_kurir["ongkir"]
+    total_akhir = total_setelah_diskon + ongkir
+
+    # Tampilan Rincian Biaya Nota
+    st.divider()
+    st.write(f"### Total Kotor Barang: Rp {total:,}")
     if diskon > 0:
         st.write(f"### 🔥 Diskon Promo (10%): -Rp {int(diskon):,}")
-    st.write(f"## Total Akhir: Rp {int(total_akhir):,}")
+    st.write(f"### 🚚 Ongkos Kirim: Rp {ongkir:,}")
+    st.write(f"## Total Akhir Pembayaran: Rp {int(total_akhir):,}")
 
     if st.button("Selesaikan Pembayaran (Checkout)", type="primary"):
+        if not alamat_kirim:
+            st.error("Gagal! Alamat pengiriman wajib diisi terlebih dahulu agar kurir tidak tersesat.")
+            return
+
         gagal_checkout = False
         for k_item in st.session_state.keranjang:
             for p in st.session_state.produk:
@@ -226,6 +260,12 @@ def render_keranjang():
             cursor = conn.cursor()
             cursor.execute("SELECT max(id) FROM transaksi WHERE username = ?", (st.session_state.username,))
             id_nota_terakhir = cursor.fetchone()[0]
+            
+            # 🌟 MODIFIKASI CERDAS: Masukkan nama kurir pilihan + Alamat lengkap ke kolom 'kurir' di database
+            # Supaya admin bisa langsung baca info lengkapnya saat packing barang!
+            info_logistik_lengkap = f"{data_kurir['nama']} | Alamat: {alamat_kirim}"
+            cursor.execute("UPDATE transaksi SET kurir = ? WHERE id = ?", (info_logistik_lengkap, id_nota_terakhir))
+            conn.commit()
             conn.close()
             
             st.info("Menghubungkan ke gerbang pembayaran Midtrans...")
@@ -244,14 +284,13 @@ def render_keranjang():
                 st.success("🎉 Checkout Berhasil! Nota pesananmu telah dibuat.")
                 st.balloons()
                 
-                # 🌟 SOLUSI JITU: Tampilkan tombol besar untuk langsung lari ke Midtrans
                 st.link_button("💳 KLIK DI SINI UNTUK BAYAR SEKARANG", link_pembayaran, type="primary", use_container_width=True)
                 st.info("💡 *Jika belum ingin membayar sekarang, kamu bisa melihat kembali link ini di menu 'Riwayat Belanja'.*")
             else:
                 st.error("Gagal membuat link pembayaran, silakan hubungi admin.")
 
 # ==============================================================================
-# 5. HALAMAN RIWAYAT BELANJA (SINKRON DATA JSON + LOGISTIK)
+# 5. HALAMAN RIWAYAT BELANJA
 # ==============================================================================
 def render_riwayat():
     st.title("📜 Riwayat Belanja Kamu")
@@ -288,10 +327,9 @@ def render_riwayat():
             
         with st.expander(f"📦 Nota #{trx_id} — {tanggal} — ({status})"):
             st.write(f"📅 **Tanggal Transaksi:** {tanggal}")
-            st.write(f"💰 **Total Belanja:** Rp {int(total_bayar):,}")
+            st.write(f"💰 **Total Belanja (Inc. Ongkir):** Rp {int(total_bayar):,}")
             st.write(f"📌 **Status Pesanan:** {status_badge}")
             
-            # 🌟 TOMBOL BAYAR CADANGAN: Ditampilkan kalau statusnya masih Belum Bayar
             if status == "Belum Bayar":
                 try:
                     conn = sqlite3.connect(DB_NAME)
@@ -306,7 +344,9 @@ def render_riwayat():
                     pass
             
             if status in ["Siap di-Jemput", "Dikirim", "Selesai"]:
-                st.info(f"🚚 **Informasi Ekspedisi:**\n- Jasa Pengiriman: `{kurir}`\n- Nomor Resi: `{no_resi}`")
+                st.info(f"🚚 **Informasi Ekspedisi & Tujuan:**\n- Detail Logistik: `{kurir}`\n- Nomor Resi: `{no_resi}`")
+            else:
+                st.info(f"📍 **Tujuan Pengiriman:** `{kurir}`")
             
             st.write("🛍️ **Daftar Produk yang Dibeli:**")
             
