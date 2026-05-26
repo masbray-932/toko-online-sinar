@@ -9,18 +9,16 @@ from datetime import datetime
 from modul.database import DB_NAME, save_produk, save_transaksi, buat_invoice_pdf
 
 # ==============================================================================
-# 1. FUNGSI INTEGRASI API MIDTRANS SANDBOX
-# ==============================================================================
-# ==============================================================================
-# 1. FUNGSI INTEGRASI API MIDTRANS (VERSI DIRECT PRODUCTION URL)
+# 1. FUNGSI INTEGRASI API MIDTRANS (VERSI SANDBOX OPTIMIZED)
 # ==============================================================================
 def buat_link_midtrans(order_id, total_harga, username):
-    # 🌟 URL DIUBAH: Menggunakan app.midtrans.com agar sinkron dengan kunci 'Mid-server-'
-    url = "https://app.midtrans.com/snap/v1/transactions"
+    # 🌟 KEMBALIKAN KE SANDBOX karena akunmu terdaftar di sistem uji coba
+    url = "https://app.sandbox.midtrans.com/snap/v1/transactions"
     
     server_key = st.secrets["midtrans"]["SERVER_KEY"]
-    server_key = server_key.strip()
+    server_key = server_key.strip() # Bersihkan spasi gaib
     
+    # Proses Enkripsi Basic Auth yang presisi
     auth_string = f"{server_key}:"
     auth_encoded = base64.b64encode(auth_string.encode("utf-8")).decode("utf-8")
     
@@ -63,9 +61,10 @@ def buat_link_midtrans(order_id, total_harga, username):
 # 2. FUNGSI CEK STATUS PEMBAYARAN MIDTRANS
 # ==============================================================================
 def cek_status_midtrans(order_id):
-    # 🌟 URL DIUBAH: Menggunakan api.midtrans.com agar sinkron dengan kunci 'Mid-server-'
-    url = f"https://api.midtrans.com/v2/NOTA-{order_id}/status"
+    # 🌟 KEMBALIKAN KE API SANDBOX
+    url = f"https://api.sandbox.midtrans.com/v2/NOTA-{order_id}/status"
     server_key = st.secrets["midtrans"]["SERVER_KEY"]
+    server_key = server_key.strip()
     
     auth_string = f"{server_key}:"
     auth_encoded = base64.b64encode(auth_string.encode("utf-8")).decode("utf-8")
