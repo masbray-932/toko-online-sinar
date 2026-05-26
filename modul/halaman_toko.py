@@ -12,11 +12,10 @@ import time
 from modul.database import DB_NAME, save_produk, save_transaksi, buat_invoice_pdf
 
 # ==============================================================================
-# 1. FUNGSI INTEGRASI API MIDTRANS SANDBOX (VERSI UTUH & SEMPURNA)
+# 1. FUNGSI INTEGRASI API MIDTRANS SANDBOX
 # ==============================================================================
 def buat_link_midtrans(order_id, total_harga, username):
     url = "https://app.sandbox.midtrans.com/snap/v1/transactions"
-    
     server_key = st.secrets["midtrans"]["SERVER_KEY"]
     
     auth_string = f"{server_key}:"
@@ -58,7 +57,7 @@ def buat_link_midtrans(order_id, total_harga, username):
         return None
 
 # ==============================================================================
-# 2. FUNGSI CEK STATUS PEMBAYARAN MIDTRANS (VERSI SEHAT)
+# 2. FUNGSI CEK STATUS PEMBAYARAN MIDTRANS
 # ==============================================================================
 def cek_status_midtrans(order_id):
     url = f"https://api.sandbox.midtrans.com/v2/NOTA-{order_id}/status"
@@ -81,7 +80,7 @@ def cek_status_midtrans(order_id):
         return None
 
 # ==============================================================================
-# 3. HALAMAN KATALOG BELANJA
+# 3. HALAMAN KATALOG BELANJA (VERSI INTERAKTIF QUANTITY COUNTER)
 # ==============================================================================
 def render_belanja():
     st.title("🛒 Toko Online Sinar")
@@ -94,32 +93,65 @@ def render_belanja():
         return
     
     for item in produk_ditampilkan:
+        # Hitung berapa banyak barang ini yang sudah jalan-jalan di dalam keranjang belanja
         jumlah_di_keranjang = sum(k["jumlah"] for k in st.session_state.keranjang if k["nama"] == item["nama"])
         stok_tampilan = item["stok"] - jumlah_di_keranjang
 
+        # Pemilihan gambar (Lokal vs Internet)
+        url_foto = item.get("foto", "")
+        if url_foto.startswith("http://") or url_foto.startswith("https://"):
+            foto_tampilan = url_foto
+        elif url_foto and os.path.exists(url_foto):
+            foto_tampilan = url_foto
+        else:
+            foto_tampilan = "https://via.placeholder.com/150?text=No+Image"
+
         col_foto, col_detail = st.columns([1, 2])
         with col_foto:
-            st.image(item["foto"] if item.get("foto") and os.path.exists(item["foto"]) else "https://via.placeholder.com/150?text=No+Image", width=200)
+            st.image(foto_tampilan, width=200)
 
         with col_detail:
             st.write(f"### {item['nama']}")
-            st.write(f"Harga: **Rp{item['harga']}** | Stok: {item['stok']} *(Tersedia: {stok_tampilan})*")
+            st.write(f"Harga: **Rp {item['harga']:,}** | Stok Total: {item['stok']} *(Tersedia: {stok_tampilan} pcs)*")
             clean_key = "".join(x for x in item["nama"] if x.isalnum())
 
             if stok_tampilan > 0:
-                if st.button(f"Tambah ke Keranjang ({item['nama']})", key=f"beli_{clean_key}"):
-                    ada_di_keranjang = False
-                    for k_item in st.session_state.keranjang:
-                        if k_item["nama"] == item["nama"]:
-                            k_item["jumlah"] += 1
-                            ada_di_keranjang = True
-                            break
-                    if not ada_di_keranjang:
-                        st.session_state.keranjang.append({"nama": item["nama"], "harga": item["harga"], "jumlah": 1})
-                    st.toast(f"{item['nama']} dimasukkan ke keranjang!")
-                    st.rerun()
+                # 🌟 KEAJAIBAN DI SINI: Bikin susunan kolom mini untuk pengatur jumlah item
+                col_counter, col_tombol = st.columns([1, 2])
+                
+                with col_counter:
+                    # Tombol stepper angka plus-minus minimal beli 1, maksimal mentok sesuai sisa stok gudang
+                    qty_dipilih = st.number_input(
+                        "Jumlah",
+                        min_value=1,
+                        max_value=int(stok_tampilan),
+                        value=1,
+                        step=1,
+                        key=f"qty_{clean_key}"
+                    )
+                
+                with col_tombol:
+                    st.write("") # Pengganjal ruang kosong biar sejajar ke bawah
+                    st.write("") 
+                    if st.button(f"🛒 Masukkan ({qty_dipilih} Pcs)", key=f"beli_{clean_key}", type="primary"):
+                        ada_di_keranjang = False
+                        # Cek apakah barangnya sudah pernah dimasukkan sebelumnya
+                        for k_item in st.session_state.keranjang:
+                            if k_item["nama"] == item["nama"]:
+                                k_item["jumlah"] += qty_dipilled # Tambah sebanyak angka stepper
+                                ada_di_keranjang = True
+                                break
+                        # Jika benar-benar produk baru di keranjang
+                        if not ada_di_keranjang:
+                            st.session_state.keranjang.append({
+                                "nama": item["nama"], 
+                                "harga": item["harga"], 
+                                "jumlah": int(qty_dipilih)
+                            })
+                        st.toast(f"✅ {qty_dipilih} Pcs {item['nama']} berhasil dimasukkan ke keranjang!")
+                        st.rerun()
             else:
-                st.warning("Stok Penuh/Habis")
+                st.warning("🔒 Maaf, Stok Produk Habis / Sudah Penuh di Keranjang")
         st.divider()
 
 # ==============================================================================
@@ -146,7 +178,7 @@ def render_keranjang():
 
         with col1:
             st.write(item["nama"])
-            st.caption(f"Harga: Rp{item['harga']}")
+            st.caption(f"Harga: Rp {item['harga']:,}")
         with col2:
             if st.button("➖", key=f"minus_{index}"):
                 if item["jumlah"] > 1:
@@ -161,7 +193,7 @@ def render_keranjang():
         total += subtotal
 
         with col4:
-            st.write(f"Rp{subtotal}")
+            st.write(f"Rp {subtotal:,}")
             if st.button("➕", key=f"plus_{index}"):
                 if item["jumlah"] < stok_asli_gudang:
                     item["jumlah"] += 1
@@ -173,10 +205,10 @@ def render_keranjang():
     diskon = total * 0.1 if total >= 200000 else 0
     total_akhir = total - diskon
 
-    st.write(f"### Total Kotor: Rp{total}")
+    st.write(f"### Total Kotor: Rp {total:,}")
     if diskon > 0:
-        st.write(f"### 🔥 Diskon Promo (10%): -Rp{int(diskon)}")
-    st.write(f"## Total Akhir: Rp{int(total_akhir)}")
+        st.write(f"### 🔥 Diskon Promo (10%): -Rp {int(diskon):,}")
+    st.write(f"## Total Akhir: Rp {int(total_akhir):,}")
 
     if st.button("Selesaikan Pembayaran (Checkout)", type="primary"):
         gagal_checkout = False
@@ -193,7 +225,6 @@ def render_keranjang():
                         p["stok"] -= k_item["jumlah"]
             
             save_produk(st.session_state.produk)
-            
             save_transaksi(st.session_state.username, st.session_state.keranjang, total_akhir)
             
             conn = sqlite3.connect(DB_NAME)
@@ -220,12 +251,11 @@ def render_keranjang():
                 st.error("Gagal membuat link pembayaran, silakan hubungi admin.")
 
 # ==============================================================================
-# 5. HALAMAN RIWAYAT BELANJA (UTUH + RE-INTEGRASI NOTA PDF)
+# 5. HALAMAN RIWAYAT BELANJA
 # ==============================================================================
 def render_riwayat():
     st.title("🛍️ Riwayat Belanja Kamu")
     
-    # KITA AMBIL DATA TRANSAKSI UTK USER YANG SEDANG LOGIN
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("""
@@ -249,11 +279,10 @@ def render_riwayat():
             st.write("### Detail Barang:")
             list_items = json.loads(items_json)
             for item in list_items:
-                st.write(f"- {item['nama']} x {item['jumlah']} : **Rp{item['harga'] * item['jumlah']}**")
-            st.write(f"### Total Tagihan: **Rp{int(total_bayar)}**")
+                st.write(f"- {item['nama']} x {item['jumlah']} : **Rp {item['harga'] * item['jumlah']:,}**")
+            st.write(f"### Total Tagihan: **Rp {int(total_bayar):,}**")
             st.divider()
 
-            # JALANKAN LOGIKA TOMBOL UNDUH PDF DI DALAM NOTA
             try:
                 pdf_bytes = buat_invoice_pdf(nota_id)
                 if pdf_bytes:
@@ -262,23 +291,21 @@ def render_riwayat():
                         data=bytes(pdf_bytes),
                         file_name=f"Invoice_TokoSinar_TS-{nota_id}.pdf",
                         mime="application/pdf",
-                        key=f"dl_pdf_{nota_id}" # Menggunakan ID Nota agar key selalu unik
+                        key=f"dl_pdf_{nota_id}"
                     )
             except Exception as e:
                 st.caption(f"Gagal memuat sistem cetak PDF: {e}")
 
-            st.write("") # Pembatas ruang kosong kecil
+            st.write("")
 
             if status == "Belum Bayar":
                 st.warning("Silakan selesaikan pembayaran otomatis Anda melalui tombol di bawah:")
-                
                 if link_midtrans:
                     st.link_button("💳 Bayar Otomatis Sekarang", url=link_midtrans, type="primary")
                 
                 st.write("")
                 if st.button("🔄 Cek Status Pembayaran", key=f"cek_{nota_id}"):
                     status_terbaru = cek_status_midtrans(nota_id)
-                    
                     if status_terbaru in ["settlement", "capture"]:
                         conn = sqlite3.connect(DB_NAME)
                         cursor = conn.cursor()
