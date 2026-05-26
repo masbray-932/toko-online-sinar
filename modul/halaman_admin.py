@@ -67,7 +67,7 @@ def render_admin():
             st.warning("⚠️ Sistem dashboard belum bisa memuat data harian. Selesaikan 1 transaksi QRIS terlebih dahulu untuk memicu pembuatan data.")
 
     # ==============================================================================
-    # TAB 2: KELOLA STOK PRODUK (FITUR CHECKBOX EDIT & HAPUS MASAL)
+    # TAB 2: KELOLA STOK PRODUK (VERSI AUTO-RESIZE & FILE UPLOADER)
     # ==============================================================================
     with tab_kelola_stok:
         st.subheader("📦 Manajemen Stok Gudang")
@@ -77,27 +77,43 @@ def render_admin():
             nama_produk = st.text_input("Nama Produk Baru", key="admin_nama_produk")
             harga_produk = st.number_input("Harga Produk (Rp)", min_value=0, step=1000, key="admin_harga_produk")
             stok_produk = st.number_input("Jumlah Stok Awal", min_value=0, step=1, key="admin_stok_produk")
-            foto_produk = st.text_input("Link Foto Produk", placeholder="https://...", key="admin_foto_produk")
+            
+            # 🌟 PERBAIKAN: Ubah ketikan teks URL menjadi File Uploader Gambar asli!
+            foto_diunggah = st.file_uploader("Unggah Foto Produk (Bebas dari HP / Laptop)", type=["jpg", "jpeg", "png"], key="admin_file_foto")
             
             if st.button("Simpan Produk", type="primary"):
                 if not nama_produk:
                     st.error("Nama produk wajib diisi!")
+                elif not foto_diunggah:
+                    st.error("Silakan unggah foto produk terlebih dahulu!")
                 else:
                     produk_gudang = list(st.session_state.produk)
-                    # Cek duplikasi
+                    
+                    # Cek duplikasi nama
                     if any(p["nama"].lower() == nama_produk.lower() for p in produk_gudang):
-                        st.error("Produk dengan nama tersebut sudah ada! Gunakan tabel di bawah untuk edit.")
+                        st.error("Produk dengan nama tersebut sudah ada!")
                     else:
-                        produk_gudang.append({
-                            "nama": nama_produk,
-                            "harga": int(harga_produk),
-                            "stok": int(stok_produk),
-                            "foto": foto_produk if foto_produk else "https://via.placeholder.com/150?text=No+Image"
-                        })
-                        st.session_state.produk = produk_gudang
-                        save_produk(produk_gudang)
-                        st.success(f"Berhasil menambahkan {nama_produk}!")
-                        st.rerun()
+                        # Panggil fungsi kompresi gambar otomatis kita dari database.py
+                        from modul.database import proses_dan_simpan_foto
+                        
+                        st.info("Sedang memproses dan mengecilkan ukuran fotomu...")
+                        try:
+                            # Jalankan fungsi Pillow dan dapatkan jalur path lokalnya
+                            jalur_foto_lokal = proses_dan_simpan_foto(foto_diunggah, nama_produk)
+                            
+                            # Masukkan data baru ke list produk
+                            produk_gudang.append({
+                                "nama": nama_produk,
+                                "harga": int(harga_produk),
+                                "stok": int(stok_produk),
+                                "foto": jalur_foto_lokal  # Hasilnya otomatis jadi 'assets/nama_barang.jpg'
+                            })
+                            st.session_state.produk = produk_gudang
+                            save_produk(produk_gudang)
+                            st.success(f"🎉 Sukses! {nama_produk} berhasil ditambah dengan foto otomatis.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Gagal memproses gambar: {e}")
 
         st.divider()
         st.write("### 📋 Daftar Semua Produk")
