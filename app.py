@@ -1,11 +1,28 @@
 import streamlit as st
-from modul.database import init_db, load_produk
+import sqlite3
+from modul.database import init_db, load_produk, DB_NAME
+from modul.keamanan import hash_password
 from modul.halaman_auth import render_login, render_register, render_lupa_password
 from modul.halaman_toko import render_belanja, render_keranjang, render_riwayat
 from modul.halaman_admin import render_admin
 
+# 1. Jalankan Inisialisasi Database
 init_db()
 
+# 🌟 FITUR AMAN: Buat akun admin otomatis langsung di app.py agar bebas Circular Import
+conn = sqlite3.connect(DB_NAME)
+cursor = conn.cursor()
+cursor.execute("SELECT username FROM pengguna WHERE username = 'admin'")
+if not cursor.fetchone():
+    password_admin_hashed = hash_password("admin123")
+    cursor.execute("""
+        INSERT INTO pengguna (username, password, email, role) 
+        VALUES ('admin', ?, 'admin@toko.com', 'admin')
+    """, (password_admin_hashed,))
+    conn.commit()
+conn.close()
+
+# 2. Inisialisasi Session State
 if "login" not in st.session_state: st.session_state.login = False
 if "username" not in st.session_state: st.session_state.username = ""
 if "role" not in st.session_state: st.session_state.role = ""
@@ -25,7 +42,6 @@ if "keranjang" not in st.session_state:
 # ALUR TAMPILAN HALAMAN
 # ==============================================================================
 if not st.session_state.login:
-    # Kontrol penuh navigasi dipindahkan langsung ke halaman utama
     if st.session_state.auth_page == "Login":
         render_login()
     elif st.session_state.auth_page == "Register":
@@ -33,7 +49,6 @@ if not st.session_state.login:
     elif st.session_state.auth_page == "Lupa Password":
         render_lupa_password()
 else:
-    # Navigasi sidebar baru akan muncul setelah user berhasil login
     st.sidebar.title("Navigation")
     st.sidebar.write(f"Logged in as: **{st.session_state.username}** ({st.session_state.role})")
     
