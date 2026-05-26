@@ -84,12 +84,17 @@ else:
     st.sidebar.title("Navigation")
     st.sidebar.write(f"Logged in as: **{st.session_state.username}** ({st.session_state.role})")
     
-    total_item = sum(item["jumlah"] for item in st.session_state.keranjang)
-    nama_menu_keranjang = f"Keranjang & Checkout ( {total_item} )" if total_item > 0 else "Keranjang & Checkout"
-        
-    list_menu = ["Belanja", nama_menu_keranjang, "Riwayat Belanja", "💬 Chat Admin"]
-    if st.session_state.role == "admin": 
-        list_menu.append("Admin Panel")
+    # ==============================================================================
+    # 🌟 FILTER SIDEBAR NAVIGASI BERDASARKAN ROLE (ADMIN VS USER)
+    # ==============================================================================
+    if st.session_state.role == "admin":
+        # Jika login sebagai admin, sembunyikan semua menu belanja & kunci ke Admin Panel
+        list_menu = ["Admin Panel"]
+    else:
+        # Jika login sebagai user biasa, tampilkan menu belanja lengkap
+        total_item = sum(item["jumlah"] for item in st.session_state.keranjang)
+        nama_menu_keranjang = f"Keranjang & Checkout ( {total_item} )" if total_item > 0 else "Keranjang & Checkout"
+        list_menu = ["Belanja", nama_menu_keranjang, "Riwayat Belanja", "💬 Chat Admin"]
         
     menu = st.sidebar.radio("Pilih Halaman", list_menu)
     
@@ -101,14 +106,17 @@ else:
         st.session_state.keranjang = [] 
         st.rerun()
 
+    # ==============================================================================
+    # EKSEKUSI RENDER HALAMAN SEUSAI PILIHAN MENU SIDEBAR
+    # ==============================================================================
     if menu == "Belanja": 
         render_belanja()
-    elif menu == nama_menu_keranjang: 
+    elif menu == "Keranjang & Checkout" or menu.startswith("Keranjang & Checkout"): 
         render_keranjang()
     elif menu == "Riwayat Belanja": 
         render_riwayat() 
     elif menu == "💬 Chat Admin":
         from modul.halaman_chat import render_chat_admin
         render_chat_admin()
-    elif menu == "Admin Panel" and st.session_state.role == "admin": 
+    elif menu == "Admin Panel": 
         render_admin()
