@@ -9,7 +9,7 @@ import time
 # ==============================================================================
 # WAJIB ADA: Import fungsi database agar dikenali oleh halaman_toko.py
 # ==============================================================================
-from modul.database import DB_NAME, save_produk, save_transaksi
+from modul.database import DB_NAME, save_produk, save_transaksi, buat_invoice_pdf
 
 # ==============================================================================
 # 1. FUNGSI INTEGRASI API MIDTRANS SANDBOX (VERSI UTUH & SEMPURNA)
@@ -19,7 +19,6 @@ def buat_link_midtrans(order_id, total_harga, username):
     
     server_key = st.secrets["midtrans"]["SERVER_KEY"]
     
-    # Langsung ambil string asli dari secrets tanpa dipaksa diubah huruf besar/kecil
     auth_string = f"{server_key}:"
     auth_encoded = base64.b64encode(auth_string.encode("utf-8")).decode("utf-8")
     
@@ -29,7 +28,6 @@ def buat_link_midtrans(order_id, total_harga, username):
         "Authorization": f"Basic {auth_encoded}"
     }
     
-    # Tambahkan timestamp detik agar ORDER ID selalu unik di server Midtrans
     unique_order_id = f"NOTA-{order_id}-{int(time.time())}"
     
     payload = {
@@ -196,22 +194,18 @@ def render_keranjang():
             
             save_produk(st.session_state.produk)
             
-            # 1. Simpan pesanan dulu ke database lokal
             save_transaksi(st.session_state.username, st.session_state.keranjang, total_akhir)
             
-            # 2. Ambil ID Transaksi terakhir yang barusan dibuat
             conn = sqlite3.connect(DB_NAME)
             cursor = conn.cursor()
             cursor.execute("SELECT max(id) FROM transaksi WHERE username = ?", (st.session_state.username,))
             id_nota_terakhir = cursor.fetchone()[0]
             conn.close()
             
-            # 3. Mintakan link pembayaran otomatis ke Midtrans
             st.info("Menghubungkan ke gerbang pembayaran Midtrans...")
             link_pembayaran = buat_link_midtrans(id_nota_terakhir, total_akhir, st.session_state.username)
             
             if link_pembayaran:
-                # 4. Simpan link pembayaran tersebut ke kolom bukti_transfer
                 conn = sqlite3.connect(DB_NAME)
                 cursor = conn.cursor()
                 cursor.execute("UPDATE transaksi SET bukti_transfer = ? WHERE id = ?", (link_pembayaran, id_nota_terakhir))
@@ -226,16 +220,19 @@ def render_keranjang():
                 st.error("Gagal membuat link pembayaran, silakan hubungi admin.")
 
 # ==============================================================================
-# 5. HALAMAN RIWAYAT BELANJA (OTOMATIS)
+# 5. HALAMAN RIWAYAT BELANJA (UTUH + RE-INTEGRASI NOTA PDF)
 # ==============================================================================
 def render_riwayat():
-    st.title("📜 Riwayat Belanja & Pembayaran")
+    st.title("🛍️ Riwayat Belanja Kamu")
     
+    # KITA AMBIL DATA TRANSAKSI UTK USER YANG SEDANG LOGIN
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("""
         SELECT id, tanggal, items, total_bayar, status, bukti_transfer 
-        FROM transaksi WHERE username = ? ORDER BY id DESC
+        FROM transaksi 
+        WHERE username = ? 
+        ORDER BY id DESC
     """, (st.session_state.username,))
     daftar_transaksi = cursor.fetchall()
     conn.close()
@@ -253,8 +250,24 @@ def render_riwayat():
             list_items = json.loads(items_json)
             for item in list_items:
                 st.write(f"- {item['nama']} x {item['jumlah']} : **Rp{item['harga'] * item['jumlah']}**")
-            st.write(f"### Total Tagihan: **Rp{total_bayar}**")
+            st.write(f"### Total Tagihan: **Rp{int(total_bayar)}**")
             st.divider()
+
+            # JALANKAN LOGIKA TOMBOL UNDUH PDF DI DALAM NOTA
+            try:
+                pdf_bytes = buat_invoice_pdf(nota_id)
+                if pdf_bytes:
+                    st.download_button(
+                        label="📄 Unduh Nota PDF Resmi",
+                        data=bytes(pdf_bytes),
+                        file_name=f"Invoice_TokoSinar_TS-{nota_id}.pdf",
+                        mime="application/pdf",
+                        key=f"dl_pdf_{nota_id}" # Menggunakan ID Nota agar key selalu unik
+                    )
+            except Exception as e:
+                st.caption(f"Gagal memuat sistem cetak PDF: {e}")
+
+            st.write("") # Pembatas ruang kosong kecil
 
             if status == "Belum Bayar":
                 st.warning("Silakan selesaikan pembayaran otomatis Anda melalui tombol di bawah:")
@@ -277,5 +290,5 @@ def render_riwayat():
                     else:
                         st.error("Sistem belum mendeteksi adanya pembayaran. Silakan bayar terlebih dahulu di Simulator.")
                         
-            elif status == "Lunas / Diproses":
+            elif status in ["Lunas", "Diproses", "Lunas / Diproses"]:
                 st.success("🎉 Pembayaran SAH & LUNAS! Barang Anda sedang dikemas oleh admin.")
