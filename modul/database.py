@@ -2,6 +2,7 @@ import streamlit as st
 import sqlite3
 import json
 from datetime import datetime
+from fpdf import FPDF  # 🌟 TAMBAHAN: Import library PDF untuk fitur cetak nota
 
 DB_NAME = "toko_online.db"
 
@@ -110,3 +111,82 @@ def save_transaksi(username, keranjang, total_bayar):
     """, (username, waktu_sekarang, items_json_string, int(total_bayar)))
     conn.commit()
     conn.close()
+
+# ==============================================================================
+# 🌟 FUNGSI BARU: MEMBUAT INVOICE PDF (DITARUH DI PALING BAWAH FILE)
+# ==============================================================================
+def buat_invoice_pdf(id_transaksi):
+    """Fungsi untuk menghasilkan file PDF invoice berdasarkan ID Transaksi"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT username, tanggal, items, total_bayar, status FROM transaksi WHERE id = ?", (id_transaksi,))
+    row = cursor.fetchone()
+    conn.close()
+    
+    if not row:
+        return None
+        
+    username, tanggal, items_json, total_bayar, status = row
+    items = json.loads(items_json)
+    
+    # Inisialisasi FPDF dengan format string latin1 (standar aman fpdf)
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    
+    # ─── HEADER NOTA ───
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(190, 10, text="TOKO ONLINE SINAR", ln=True, align="C")
+    pdf.set_font("Arial", size=10)
+    pdf.cell(190, 5, text="Invoice Resmi Pembelanjaan Online", ln=True, align="C")
+    pdf.ln(10)
+    
+    # ─── INFORMASI TRANSAKSI ───
+    pdf.set_font("Arial", "B", 11)
+    pdf.cell(100, 7, text=f"ID Invoice: #TS-{id_transaksi}", ln=False)
+    pdf.cell(90, 7, text=f"Tanggal: {tanggal}", ln=True, align="R")
+    
+    pdf.set_font("Arial", size=11)
+    pdf.cell(100, 7, text=f"Pelanggan: {username}", ln=False)
+    pdf.set_font("Arial", "B", 11)
+    
+    # Atur warna teks status
+    if status in ["Lunas", "Diproses", "Lunas / Diproses"]:
+        pdf.set_text_color(0, 128, 0) # Hijau
+    else:
+        pdf.set_text_color(255, 0, 0) # Merah
+        
+    pdf.cell(90, 7, text=f"Status: {status.upper()}", ln=True, align="R")
+    pdf.set_text_color(0, 0, 0) # Reset ke warna hitam
+    pdf.ln(5)
+    
+    # ─── TABEL BARANG ───
+    pdf.set_font("Arial", "B", 11)
+    # Header Tabel
+    pdf.cell(90, 8, text="Nama Produk", border=1, ln=False)
+    pdf.cell(35, 8, text="Harga Satuan", border=1, ln=False, align="C")
+    pdf.cell(25, 8, text="Jumlah", border=1, ln=False, align="C")
+    pdf.cell(40, 8, text="Subtotal", border=1, ln=True, align="C")
+    
+    # Isi Tabel
+    pdf.set_font("Arial", size=11)
+    for item in items:
+        subtotal = item["harga"] * item["jumlah"]
+        pdf.cell(90, 8, text=str(item["nama"]), border=1, ln=False)
+        pdf.cell(35, 8, text=f"Rp {item['harga']:,}", border=1, ln=False, align="R")
+        pdf.cell(25, 8, text=str(item["jumlah"]), border=1, ln=False, align="C")
+        pdf.cell(40, 8, text=f"Rp {subtotal:,}", border=1, ln=True, align="R")
+        
+    # Total Bayar
+    pdf.set_font("Arial", "B", 11)
+    pdf.cell(150, 10, text="TOTAL PEMBAYARAN : ", border=1, ln=False, align="R")
+    pdf.cell(40, 10, text=f"Rp {int(total_bayar):,}", border=1, ln=True, align="R")
+    pdf.ln(15)
+    
+    # ─── FOOTER ───
+    pdf.set_font("Arial", "I", 10)
+    pdf.cell(190, 5, text="Terima kasih telah berbelanja di Toko Online Sinar!", ln=True, align="C")
+    pdf.cell(190, 5, text="Nota ini sah dan dihasilkan secara otomatis oleh sistem.", ln=True, align="C")
+    
+    # Kembalikan file PDF dalam bentuk bytes murni
+    return pdf.output()
