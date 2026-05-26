@@ -7,7 +7,7 @@ from modul.database import DB_NAME, load_produk, save_produk, load_users, save_u
 def render_admin():
     st.title("👑 Panel Kendali Admin")
     
-    # 🌟 SEKARANG KITA BUAT 5 TAB AGAR INTEGRASI LIVE CHAT MASUK DENGAN RAPI
+    # 🌟 KITA BUAT 3 TAB AGAR INTEGRASI LIVE CHAT MASUK DENGAN RAPI
     tab_dashboard, tab_kelola_stok, tab_chat_customer = st.tabs([
         "📊 Dashboard Analisis", 
         "📦 Kelola Stok Produk", 
@@ -102,10 +102,8 @@ def render_admin():
                         
                         st.info("Sedang memproses dan mengecilkan ukuran fotomu...")
                         try:
-                            # Jalankan fungsi Pillow dan dapatkan jalur path lokalnya
                             jalur_foto_lokal = proses_dan_simpan_foto(foto_diunggah, nama_produk)
                             
-                            # Masukkan data baru ke list produk
                             produk_gudang.append({
                                 "nama": nama_produk,
                                 "harga": int(harga_produk),
@@ -125,11 +123,8 @@ def render_admin():
         
         if st.session_state.produk:
             df_asal = pd.DataFrame(st.session_state.produk)
-            
-            # Sisipkan kolom Checkbox 'Pilih' di urutan paling kiri
             df_asal.insert(0, "Pilih", False)
             
-            # TAMPILKAN TABEL EDITOR INTERAKTIF DENGAN CHECKBOX
             df_diedit = st.data_editor(
                 df_asal,
                 hide_index=True,
@@ -169,4 +164,41 @@ def render_admin():
             st.info("Belum ada produk di dalam gudang.")
 
     # ==============================================================================
-    # 🌟 TAB 3: LIVE CHAT DENG
+    # 🌟 TAB 3: LIVE CHAT DENGAN CUSTOMER (SEKARANG UTUH & ANTI-TERPOTONG)
+    # ==============================================================================
+    with tab_chat_customer:
+        st.subheader("💬 Pusat Bantuan & Chat Customer")
+        
+        # Ambil daftar semua user dari database agar admin bisa pilih partner obrolan
+        daftar_user = load_users()
+        pilihan_customer = [u for u in daftar_user.keys() if u != "admin"]
+        
+        if not pilihan_customer:
+            st.info("Belum ada data customer terdaftar di sistem database.")
+        else:
+            customer_dipilih = st.selectbox("🎯 Pilih Customer yang Ingin Diajak Chat:", pilihan_customer, key="admin_select_chat_user")
+            st.divider()
+            
+            # Tarik riwayat percakapan admin dengan customer terpilih
+            riwayat_chat_admin = ambil_chat_antara("admin", customer_dipilih)
+            
+            # Wadah khusus obrolan ber-scroll rapi
+            wadah_chat_admin = st.container(height=400, border=True)
+            with wadah_chat_admin:
+                if not riwayat_chat_admin:
+                    st.info(f"Belum ada riwayat obrolan dengan {customer_dipilih}. Sapa mereka duluan yuk!")
+                else:
+                    for chat in riwayat_chat_admin:
+                        # Atur posisi bubble chat (Kanan: Admin sendiri, Kiri: Pesan customer)
+                        role_tampilan = "user" if chat["pengirim"] == "admin" else "assistant"
+                        nama_label = "🤵 Anda (Admin)" if chat["pengirim"] == "admin" else f"👤 {chat['pengirim']}"
+                        
+                        with st.chat_message(role_tampilan):
+                            st.write(f"**{nama_label}** <small style='color:gray;'>({chat['tanggal']})</small>", unsafe_allow_html=True)
+                            st.write(chat["teks"])
+            
+            # Kotak pengetikan balasan pesan khusus untuk Admin
+            balasan_admin = st.chat_input(f"Ketik balasan pesan ke {customer_dipilih} di sini...", key="input_balasan_admin")
+            if balasan_admin:
+                simpan_chat(pengirim="admin", penerima=customer_dipilih, teks=balasan_admin)
+                st.rerun()
