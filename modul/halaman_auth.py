@@ -2,8 +2,7 @@ import streamlit as st
 import sqlite3
 import random
 from modul.database import DB_NAME
-from modul.keamanan import hash_password, verifikasi_password
-import modul.keamanan as keamanan
+import modul.keamanan as keamanan  # Menggunakan satu impor aman untuk semua fungsi keamanan
 
 # ==============================================================================
 # FUNGSI PROSES DATABASE UNTUK LUPA PASSWORD
@@ -11,7 +10,8 @@ import modul.keamanan as keamanan
 def update_password_lewat_email(email, password_baru):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    password_hashed = hash_password(password_baru)
+    # Memanggil hash_password lewat alias modul keamanan
+    password_hashed = keamanan.hash_password(password_baru)
     cursor.execute("UPDATE pengguna SET password = ? WHERE email = ?", (password_hashed, email))
     conn.commit()
     conn.close()
@@ -39,7 +39,8 @@ def render_login():
         row = cursor.fetchone()
         conn.close()
 
-        if row and verifikasi_password(password, row[0]):
+        # Memanggil verifikasi_password lewat alias modul keamanan
+        if row and keamanan.verifikasi_password(password, row[0]):
             st.session_state.login = True
             st.session_state.username = username
             st.session_state.role = row[1]
@@ -53,8 +54,7 @@ def render_login():
 # ==============================================================================
 def render_register():
     st.subheader("📝 Daftar Akun Baru")
-    # ... (Biarkan isi fungsi render_register milikmu yang lama tetap seperti aslinya di sini)
-    # Catatan: Jika kodingan lama registermu panjang, pastikan tidak terhapus ya, bestie!
+    # Catatan: Jika kodingan lama registermu panjang, pastikan pasang di sini ya, bestie!
     st.info("Fitur registrasi akun berjalan normal.")
 
 # ==============================================================================
@@ -80,10 +80,8 @@ def render_lupa_password():
                 
                 # Kirim ke email user
                 st.info("Sedang mengirim OTP ke email Anda...")
-                # Panggil fungsi kirim email OTP yang kamu punya dari modul keamanan
-                # Sesuaikan nama fungsinya ya, misalnya: kirim_email_otp(email, otp_code)
                 try:
-                    kirim_email_otp(email, otp_code) 
+                    keamanan.kirim_otp(email, otp_code) 
                     st.success("Kode OTP berhasil dikirim! Silakan cek kotak masuk/spam email Anda.")
                     st.session_state.forgot_step = 2
                     st.rerun()
@@ -113,3 +111,6 @@ def render_lupa_password():
                 st.session_state.forgot_step = 1
                 st.session_state.forgot_email = ""
                 st.session_state.forgot_otp = ""
+                
+                # Tambahan: Paksa refresh halaman agar menu kembali bersih ke menu awal
+                st.rerun()
