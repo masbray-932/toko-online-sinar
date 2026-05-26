@@ -12,9 +12,16 @@ from modul.database import DB_NAME, save_produk, save_transaksi, buat_invoice_pd
 # 1. FUNGSI INTEGRASI API MIDTRANS SANDBOX
 # ==============================================================================
 def buat_link_midtrans(order_id, total_harga, username):
+    # 1. Tetap gunakan URL Sandbox karena di dashboard kamu tertulis Sandbox
     url = "https://app.sandbox.midtrans.com/snap/v1/transactions"
+    
+    # 2. Tarik kunci dari st.secrets (Pastikan di secrets Streamlit Cloud nilainya sudah terpasang)
     server_key = st.secrets["midtrans"]["SERVER_KEY"]
     
+    # 🌟 TRIK AMPUH: Pastikan tidak ada spasi sisa atau karakter '\n' tersembunyi
+    server_key = server_key.strip()
+    
+    # 3. Proses Enkripsi Basic Auth Midtrans
     auth_string = f"{server_key}:"
     auth_encoded = base64.b64encode(auth_string.encode("utf-8")).decode("utf-8")
     
@@ -131,7 +138,7 @@ def render_belanja():
                         ada_di_keranjang = False
                         for k_item in st.session_state.keranjang:
                             if k_item["nama"] == item["nama"]:
-                                k_item["jumlah"] += int(qty_dipilih)  # 🌟 FIX TYPO: ganti qty_dipilled jadi qty_dipilih
+                                k_item["jumlah"] += int(qty_dipilih)
                                 ada_di_keranjang = True
                                 break
                         
@@ -252,7 +259,6 @@ def render_riwayat():
     
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    # 🌟 FIX COLUMN: ganti 'total' jadi 'total_bayar' agar match dengan database.py
     cursor.execute("""
         SELECT id, total_bayar, tanggal, status, kurir, no_resi 
         FROM transaksi 
@@ -285,13 +291,11 @@ def render_riwayat():
             st.write(f"💰 **Total Belanja:** Rp {int(total_bayar):,}")
             st.write(f"📌 **Status Pesanan:** {status_badge}")
             
-            # Tampilkan informasi pelacakan logistik jika paket sudah siap jalan
             if status in ["Siap di-Jemput", "Dikirim", "Selesai"]:
                 st.info(f"🚚 **Informasi Ekspedisi:**\n- Jasa Pengiriman: `{kurir}`\n- Nomor Resi: `{no_resi}`")
             
-            st.write("🛍 nighttime **Daftar Produk yang Dibeli:**")
+            st.write("🛍️ **Daftar Produk yang Dibeli:**")
             
-            # 🌟 FIX TOTAL LOGIKA: Baca data barang belanjaan langsung dari string JSON di kolom 'items'
             try:
                 conn = sqlite3.connect(DB_NAME)
                 cursor = conn.cursor()
@@ -306,7 +310,6 @@ def render_riwayat():
             except Exception as e:
                 st.write("⚠️ Gagal memuat daftar produk.")
                 
-            # Tombol konfirmasi penyelesaian transaksi di sisi customer
             if status == "Dikirim":
                 if st.button(f"✅ Konfirmasi Barang Diterima (#{trx_id})", key=f"btn_selesai_{trx_id}"):
                     conn = sqlite3.connect(DB_NAME)
