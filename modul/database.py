@@ -54,6 +54,16 @@ def init_db():
             bukti_transfer TEXT
         )
     """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS pesan_chat (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pengirim TEXT,
+            penerima TEXT,
+            teks TEXT,
+            tanggal TEXT
+        )
+    """)
+    
     conn.commit()
     conn.close()
 
@@ -221,3 +231,31 @@ def proses_dan_simpan_foto(file_diunggah, nama_produk):
         img_resized.save(jalur_simpan, "JPEG", quality=85)
         
     return jalur_simpan
+# ==============================================================================
+# FUNGSI LIVE CHAT LOKAL (CUSTOMER & ADMIN)
+# ==============================================================================
+def ambil_chat_antara(user_a, user_b):
+    """Mengambil riwayat chat antara dua pengguna secara berurutan waktu"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT pengirim, penerima, teks, tanggal 
+        FROM pesan_chat 
+        WHERE (pengirim = ? AND penerima = ?) OR (pengirim = ? AND penerima = ?)
+        ORDER BY id ASC
+    """, (user_a, user_b, user_b, user_a))
+    rows = cursor.fetchall()
+    conn.close()
+    return [{"pengirim": r[0], "penerima": r[1], "teks": r[2], "tanggal": r[3]} for r in rows]
+
+def simpan_chat(pengirim, penerima, teks):
+    """Menyimpan pesan chat baru ke database"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    waktu_sekarang = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute("""
+        INSERT INTO pesan_chat (pengirim, penerima, teks, tanggal) 
+        VALUES (?, ?, ?, ?)
+    """, (pengirim, penerima, teks, waktu_sekarang))
+    conn.commit()
+    conn.close()
