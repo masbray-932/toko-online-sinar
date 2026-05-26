@@ -1,13 +1,15 @@
 import streamlit as st  
 import sqlite3
 import json
+import os
 from datetime import datetime
-from fpdf import FPDF  # 🌟 TAMBAHAN: Import library PDF untuk fitur cetak nota
+from fpdf import FPDF  
+from PIL import Image
 
 DB_NAME = "toko_online.db"
 
 # ==============================================================================
-# FUNGSI INISIALISASI DATABASE UTAMA (MURNI TANPA IMPOR KEANAMAN)
+# FUNGSI INISIALISASI DATABASE UTAMA
 # ==============================================================================
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -91,6 +93,10 @@ def load_produk():
 def save_produk(list_produk):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
+    
+    # 🌟 OPTIMASI: Kosongkan tabel produk lama agar sinkron total jika ada produk dihapus/diedit
+    cursor.execute("DELETE FROM produk")
+    
     for p in list_produk:
         cursor.execute("INSERT OR REPLACE INTO produk (nama, harga, stok, foto) VALUES (?, ?, ?, ?)", 
                        (p["nama"], p["harga"], p["stok"], p["foto"]))
@@ -113,7 +119,7 @@ def save_transaksi(username, keranjang, total_bayar):
     conn.close()
 
 # ==============================================================================
-# 🌟 FUNGSI BARU: MEMBUAT INVOICE PDF (DITARUH DI PALING BAWAH FILE)
+# FUNGSI MEMBUAT INVOICE PDF
 # ==============================================================================
 def buat_invoice_pdf(id_transaksi):
     """Fungsi untuk menghasilkan file PDF invoice berdasarkan ID Transaksi"""
@@ -129,19 +135,18 @@ def buat_invoice_pdf(id_transaksi):
     username, tanggal, items_json, total_bayar, status = row
     items = json.loads(items_json)
     
-    # Inisialisasi FPDF dengan format string latin1 (standar aman fpdf)
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
     
-    # ─── HEADER NOTA ───
+    # Header Nota
     pdf.set_font("Arial", "B", 16)
     pdf.cell(190, 10, text="TOKO ONLINE SINAR", ln=True, align="C")
     pdf.set_font("Arial", size=10)
     pdf.cell(190, 5, text="Invoice Resmi Pembelanjaan Online", ln=True, align="C")
     pdf.ln(10)
     
-    # ─── INFORMASI TRANSAKSI ───
+    # Informasi Transaksi
     pdf.set_font("Arial", "B", 11)
     pdf.cell(100, 7, text=f"ID Invoice: #TS-{id_transaksi}", ln=False)
     pdf.cell(90, 7, text=f"Tanggal: {tanggal}", ln=True, align="R")
@@ -150,25 +155,23 @@ def buat_invoice_pdf(id_transaksi):
     pdf.cell(100, 7, text=f"Pelanggan: {username}", ln=False)
     pdf.set_font("Arial", "B", 11)
     
-    # Atur warna teks status
+    # Status warna teks
     if status in ["Lunas", "Diproses", "Lunas / Diproses"]:
-        pdf.set_text_color(0, 128, 0) # Hijau
+        pdf.set_text_color(0, 128, 0)
     else:
-        pdf.set_text_color(255, 0, 0) # Merah
+        pdf.set_text_color(255, 0, 0)
         
     pdf.cell(90, 7, text=f"Status: {status.upper()}", ln=True, align="R")
-    pdf.set_text_color(0, 0, 0) # Reset ke warna hitam
+    pdf.set_text_color(0, 0, 0)
     pdf.ln(5)
     
-    # ─── TABEL BARANG ───
+    # Tabel Barang
     pdf.set_font("Arial", "B", 11)
-    # Header Tabel
     pdf.cell(90, 8, text="Nama Produk", border=1, ln=False)
     pdf.cell(35, 8, text="Harga Satuan", border=1, ln=False, align="C")
     pdf.cell(25, 8, text="Jumlah", border=1, ln=False, align="C")
     pdf.cell(40, 8, text="Subtotal", border=1, ln=True, align="C")
     
-    # Isi Tabel
     pdf.set_font("Arial", size=11)
     for item in items:
         subtotal = item["harga"] * item["jumlah"]
@@ -177,16 +180,44 @@ def buat_invoice_pdf(id_transaksi):
         pdf.cell(25, 8, text=str(item["jumlah"]), border=1, ln=False, align="C")
         pdf.cell(40, 8, text=f"Rp {subtotal:,}", border=1, ln=True, align="R")
         
-    # Total Bayar
     pdf.set_font("Arial", "B", 11)
     pdf.cell(150, 10, text="TOTAL PEMBAYARAN : ", border=1, ln=False, align="R")
     pdf.cell(40, 10, text=f"Rp {int(total_bayar):,}", border=1, ln=True, align="R")
     pdf.ln(15)
     
-    # ─── FOOTER ───
     pdf.set_font("Arial", "I", 10)
     pdf.cell(190, 5, text="Terima kasih telah berbelanja di Toko Online Sinar!", ln=True, align="C")
     pdf.cell(190, 5, text="Nota ini sah dan dihasilkan secara otomatis oleh sistem.", ln=True, align="C")
     
-    # Kembalikan file PDF dalam bentuk bytes murni
     return pdf.output()
+
+# ==============================================================================
+# FUNGSI PROSES DAN KOMPRES FOTO PRODUK
+# ==============================================================================
+def proses_dan_simpan_foto(file_diunggah, nama_produk):
+    """
+    Fungsi otomatis untuk memotong (crop) tengah dan mengecilkan (resize)
+    foto produk menjadi ukuran kotak 500x500 pixel agar hemat ruang storage.
+    """
+    if not os.path.exists("assets"):
+        os.makedirs("assets")
+        
+    nama_file_aman = "".join(x for x in nama_produk.lower() if x.isalnum() or x in [" ", "_", "-"]).replace(" ", "_")
+    jalur_simpan = f"assets/{nama_file_aman}.jpg"
+    
+    with Image.open(file_diunggah) as img:
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+            
+        lebar, tinggi = img.size
+        ukuran_terkecil = min(lebar, tinggi)
+        left = (lebar - ukuran_terkecil) / 2
+        top = (tinggi - ukuran_terkecil) / 2
+        right = (lebar + ukuran_terkecil) / 2
+        bottom = (tinggi + ukuran_terkecil) / 2
+        img_cropped = img.crop((left, top, right, bottom))
+        
+        img_resized = img_cropped.resize((500, 500), Image.Resampling.LANCZOS)
+        img_resized.save(jalur_simpan, "JPEG", quality=85)
+        
+    return jalur_simpan
