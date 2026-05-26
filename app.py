@@ -21,6 +21,32 @@ if "produk" not in st.session_state:
 if "keranjang" not in st.session_state:
     st.session_state.keranjang = []
 
+if not st.session_state.login:
+    # Kita buat session state baru untuk melacak halaman auth mana yang aktif
+    if "auth_page" not in st.session_state:
+        st.session_state.auth_page = "Login"
+        
+    if st.session_state.auth_page == "Login":
+        render_login()
+    elif st.session_state.auth_page == "Register":
+        render_register()
+    elif st.session_state.auth_page == "Lupa Password":
+        render_lupa_password()
+else:
+    # 🌟 PINDAHKAN KE SINI: Judul navigation baru muncul kalau USER SUDAH LOGIN
+    st.sidebar.title("Navigation") 
+    st.sidebar.write(f"Logged in as: **{st.session_state.username}** ({st.session_state.role})")
+    
+    # Hitung badge total item di keranjang secara real-time
+    total_item = sum(item["jumlah"] for item in st.session_state.keranjang)
+    if total_item > 0:
+        nama_menu_keranjang = f"Keranjang & Checkout ( {total_item} )"
+    else:
+        nama_menu_keranjang = "Keranjang & Checkout"
+        
+    list_menu = ["Belanja", nama_menu_keranjang, "Riwayat Belanja"]
+    if st.session_state.role == "admin": list_menu.append("Admin Panel")
+
 st.sidebar.title("Navigation")
 
 # KODE BARU (Navigasi dikendalikan lewat halaman utama):
