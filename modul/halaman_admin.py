@@ -164,41 +164,66 @@ def render_admin():
             st.info("Belum ada produk di dalam gudang.")
 
     # ==============================================================================
-    # 🌟 TAB 3: LIVE CHAT DENGAN CUSTOMER (SEKARANG UTUH & ANTI-TERPOTONG)
+    # 🌟 TAB 3: LIVE CHAT DENGAN CUSTOMER (VERSI FIX - DETEKSI USER AKTIF)
     # ==============================================================================
     with tab_chat_customer:
         st.subheader("💬 Pusat Bantuan & Chat Customer")
         
-        # Ambil daftar semua user dari database agar admin bisa pilih partner obrolan
-        daftar_user = load_users()
-        pilihan_customer = [u for u in daftar_user.keys() if u != "admin"]
-        
+        # 1. Tarik daftar user unik yang beneran pernah nge-chat biar admin ga buta
+        try:
+            conn = sqlite3.connect(DB_NAME)
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT DISTINCT pengirim FROM pesan_chat 
+                WHERE pengirim != 'admin'
+                UNION
+                SELECT DISTINCT penerima FROM pesan_chat 
+                WHERE penerima != 'admin'
+            """)
+            pilihan_customer = [row[0] for row in cursor.fetchall() if row[0]]
+            conn.close()
+        except Exception:
+            pilihan_customer = []
+            
         if not pilihan_customer:
-            st.info("Belum ada data customer terdaftar di sistem database.")
+            st.info("📭 Belum ada pesan chat masuk dari customer mana pun.")
         else:
-            customer_dipilih = st.selectbox("🎯 Pilih Customer yang Ingin Diajak Chat:", pilihan_customer, key="admin_select_chat_user")
-            st.divider()
+            # Tampilkan pilihan customer aktif dengan layout yang lebih interaktif
+            col_pilih, col_info = st.columns([2, 3])
             
-            # Tarik riwayat percakapan admin dengan customer terpilih
-            riwayat_chat_admin = ambil_chat_antara("admin", customer_dipilih)
-            
-            # Wadah khusus obrolan ber-scroll rapi
-            wadah_chat_admin = st.container(height=400, border=True)
-            with wadah_chat_admin:
-                if not riwayat_chat_admin:
-                    st.info(f"Belum ada riwayat obrolan dengan {customer_dipilih}. Sapa mereka duluan yuk!")
-                else:
-                    for chat in riwayat_chat_admin:
-                        # Atur posisi bubble chat (Kanan: Admin sendiri, Kiri: Pesan customer)
-                        role_tampilan = "user" if chat["pengirim"] == "admin" else "assistant"
-                        nama_label = "🤵 Anda (Admin)" if chat["pengirim"] == "admin" else f"👤 {chat['pengirim']}"
-                        
-                        with st.chat_message(role_tampilan):
-                            st.write(f"**{nama_label}** <small style='color:gray;'>({chat['tanggal']})</small>", unsafe_allow_html=True)
-                            st.write(chat["teks"])
-            
-            # Kotak pengetikan balasan pesan khusus untuk Admin
-            balasan_admin = st.chat_input(f"Ketik balasan pesan ke {customer_dipilih} di sini...", key="input_balasan_admin")
-            if balasan_admin:
-                simpan_chat(pengirim="admin", penerima=customer_dipilih, teks=balasan_admin)
-                st.rerun()
+            with col_pilih:
+                st.write("📁 **Daftar Obrolan Aktif:**")
+                customer_dipilih = st.radio(
+                    "Pilih customer untuk dibalas:",
+                    options=pilihan_customer,
+                    label_visibility="collapsed",
+                    key="admin_radio_chat_active"
+                )
+                
+            with col_info:
+                st.write(f"💬 **Ruang Obrolan Bersama:** `{customer_dipilih}`")
+                st.divider()
+                
+                # Tarik riwayat percakapan admin dengan customer terpilih
+                riwayat_chat_admin = ambil_chat_antara("admin", customer_dipilih)
+                
+                # Wadah khusus obrolan ber-scroll rapi
+                wadah_chat_admin = st.container(height=350, border=True)
+                with wadah_chat_admin:
+                    if not riwayat_chat_admin:
+                        st.info(f"Belum ada riwayat obrolan dengan {customer_dipilih}.")
+                    else:
+                        for chat in riwayat_chat_admin:
+                            # Atur posisi bubble chat (Kanan: Admin sendiri, Kiri: Pesan customer)
+                            role_tampilan = "user" if chat["pengirim"] == "admin" else "assistant"
+                            nama_label = "🤵 Anda (Admin)" if chat["pengirim"] == "admin" else f"👤 {chat['pengirim']}"
+                            
+                            with st.chat_message(role_tampilan):
+                                st.write(f"**{nama_label}** <small style='color:gray;'>({chat['tanggal']})</small>", unsafe_allow_html=True)
+                                st.write(chat["teks"])
+                
+                # Kotak pengetikan balasan pesan khusus untuk Admin
+                balasan_admin = st.chat_input(f"Balas ke {customer_dipilih}...", key="input_balasan_admin_fix")
+                if balasan_admin:
+                    simpan_chat(pengirim="admin", penerima=customer_dipilih, teks=balasan_admin)
+                    st.rerun()
