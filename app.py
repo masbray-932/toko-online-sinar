@@ -121,3 +121,7 @@ else:
         render_chat_admin()
     elif menu == "Admin Panel" and st.session_state.role == "admin": 
         render_admin()
+    elif menu == "💬 Chat Admin":
+        # 🌟 PERBAIKAN: Impor dari file modul baru yang independen dan aman
+        from modul.halaman_chat import render_chat_admin
+        render_chat_admin()
