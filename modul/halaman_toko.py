@@ -5,11 +5,7 @@ import sqlite3
 import requests
 import base64
 import time
-from modul.database import DB_NAME, save_produk, save_transaksi, buat_invoice_pdf
-
-# ==============================================================================
-# WAJIB ADA: Import fungsi database agar dikenali oleh halaman_toko.py
-# ==============================================================================
+from datetime import datetime
 from modul.database import DB_NAME, save_produk, save_transaksi, buat_invoice_pdf
 
 # ==============================================================================
@@ -94,7 +90,6 @@ def render_belanja():
         return
     
     for item in produk_ditampilkan:
-        # Hitung berapa banyak barang ini yang sudah jalan-jalan di dalam keranjang belanja
         jumlah_di_keranjang = sum(k["jumlah"] for k in st.session_state.keranjang if k["nama"] == item["nama"])
         stok_tampilan = item["stok"] - jumlah_di_keranjang
 
@@ -117,11 +112,9 @@ def render_belanja():
             clean_key = "".join(x for x in item["nama"] if x.isalnum())
 
             if stok_tampilan > 0:
-                # 🌟 KEAJAIBAN DI SINI: Bikin susunan kolom mini untuk pengatur jumlah item
                 col_counter, col_tombol = st.columns([1, 2])
                 
                 with col_counter:
-                    # Tombol stepper angka plus-minus minimal beli 1, maksimal mentok sesuai sisa stok gudang
                     qty_dipilih = st.number_input(
                         "Jumlah",
                         min_value=1,
@@ -132,17 +125,16 @@ def render_belanja():
                     )
                 
                 with col_tombol:
-                    st.write("") # Pengganjal ruang kosong biar sejajar ke bawah
+                    st.write("") 
                     st.write("") 
                     if st.button(f"🛒 Masukkan ({qty_dipilih} Pcs)", key=f"beli_{clean_key}", type="primary"):
                         ada_di_keranjang = False
-                        # Cek apakah barangnya sudah pernah dimasukkan sebelumnya
                         for k_item in st.session_state.keranjang:
                             if k_item["nama"] == item["nama"]:
-                                k_item["jumlah"] += qty_dipilled # Tambah sebanyak angka stepper
+                                k_item["jumlah"] += int(qty_dipilih)  # 🌟 FIX TYPO: ganti qty_dipilled jadi qty_dipilih
                                 ada_di_keranjang = True
                                 break
-                        # Jika benar-benar produk baru di keranjang
+                        
                         if not ada_di_keranjang:
                             st.session_state.keranjang.append({
                                 "nama": item["nama"], 
@@ -252,71 +244,75 @@ def render_keranjang():
                 st.error("Gagal membuat link pembayaran, silakan hubungi admin.")
 
 # ==============================================================================
-# 5. HALAMAN RIWAYAT BELANJA
+# 5. HALAMAN RIWAYAT BELANJA (SINKRON DATA JSON + LOGISTIK)
 # ==============================================================================
 def render_riwayat():
-    st.title("🛍️ Riwayat Belanja Kamu")
+    st.title("📜 Riwayat Belanja Kamu")
+    username = st.session_state.get("username")
     
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
+    # 🌟 FIX COLUMN: ganti 'total' jadi 'total_bayar' agar match dengan database.py
     cursor.execute("""
-        SELECT id, tanggal, items, total_bayar, status, bukti_transfer 
+        SELECT id, total_bayar, tanggal, status, kurir, no_resi 
         FROM transaksi 
         WHERE username = ? 
         ORDER BY id DESC
-    """, (st.session_state.username,))
+    """, (username,))
     daftar_transaksi = cursor.fetchall()
     conn.close()
-
+    
     if not daftar_transaksi:
-        st.info("Kamu belum pernah melakukan transaksi apa pun.")
+        st.info("🛒 Kamu belum pernah melakukan transaksi apa pun.")
         return
-
-    for nota in daftar_transaksi:
-        nota_id, tanggal, items_json, total_bayar, status, link_midtrans = nota
-        status_tampilan = f"🔴 {status}" if status == "Belum Bayar" else f"🟢 {status}"
-
-        with st.expander(f"Nota #{nota_id} - {tanggal} | {status_tampilan}"):
-            st.write("### Detail Barang:")
-            list_items = json.loads(items_json)
-            for item in list_items:
-                st.write(f"- {item['nama']} x {item['jumlah']} : **Rp {item['harga'] * item['jumlah']:,}**")
-            st.write(f"### Total Tagihan: **Rp {int(total_bayar):,}**")
-            st.divider()
-
+        
+    for trx in daftar_transaksi:
+        trx_id, total_bayar, tanggal, status, kurir, no_resi = trx
+        
+        if status == "Belum Bayar":
+            status_badge = "🔴 **Belum Bayar**"
+        elif status in ["Diproses", "Lunas", "Lunas / Diproses"]:
+            status_badge = "🟡 **Sedang Dipacking**"
+        elif status == "Siap di-Jemput":
+            status_badge = "🔵 **Siap di-Jemput Kurir**"
+        elif status == "Dikirim":
+            status_badge = "🚚 **Dalam Pengiriman**"
+        else:
+            status_badge = "🟢 **Selesai**"
+            
+        with st.expander(f"📦 Nota #{trx_id} — {tanggal} — ({status})"):
+            st.write(f"📅 **Tanggal Transaksi:** {tanggal}")
+            st.write(f"💰 **Total Belanja:** Rp {int(total_bayar):,}")
+            st.write(f"📌 **Status Pesanan:** {status_badge}")
+            
+            # Tampilkan informasi pelacakan logistik jika paket sudah siap jalan
+            if status in ["Siap di-Jemput", "Dikirim", "Selesai"]:
+                st.info(f"🚚 **Informasi Ekspedisi:**\n- Jasa Pengiriman: `{kurir}`\n- Nomor Resi: `{no_resi}`")
+            
+            st.write("🛍 nighttime **Daftar Produk yang Dibeli:**")
+            
+            # 🌟 FIX TOTAL LOGIKA: Baca data barang belanjaan langsung dari string JSON di kolom 'items'
             try:
-                pdf_bytes = buat_invoice_pdf(nota_id)
-                if pdf_bytes:
-                    st.download_button(
-                        label="📄 Unduh Nota PDF Resmi",
-                        data=bytes(pdf_bytes),
-                        file_name=f"Invoice_TokoSinar_TS-{nota_id}.pdf",
-                        mime="application/pdf",
-                        key=f"dl_pdf_{nota_id}"
-                    )
-            except Exception as e:
-                st.caption(f"Gagal memuat sistem cetak PDF: {e}")
-
-            st.write("")
-
-            if status == "Belum Bayar":
-                st.warning("Silakan selesaikan pembayaran otomatis Anda melalui tombol di bawah:")
-                if link_midtrans:
-                    st.link_button("💳 Bayar Otomatis Sekarang", url=link_midtrans, type="primary")
+                conn = sqlite3.connect(DB_NAME)
+                cursor = conn.cursor()
+                cursor.execute("SELECT items FROM transaksi WHERE id = ?", (trx_id,))
+                items_json = cursor.fetchone()[0]
+                conn.close()
                 
-                st.write("")
-                if st.button("🔄 Cek Status Pembayaran", key=f"cek_{nota_id}"):
-                    status_terbaru = cek_status_midtrans(nota_id)
-                    if status_terbaru in ["settlement", "capture"]:
-                        conn = sqlite3.connect(DB_NAME)
-                        cursor = conn.cursor()
-                        cursor.execute("UPDATE transaksi SET status = 'Lunas / Diproses' WHERE id = ?", (nota_id,))
-                        conn.commit()
-                        conn.close()
-                        st.success("🎉 Pembayaran Anda berhasil terverifikasi otomatis oleh sistem! Pesanan diproses.")
-                        st.rerun()
-                    else:
-                        st.error("Sistem belum mendeteksi adanya pembayaran. Silakan bayar terlebih dahulu di Simulator.")
-                        
-            elif status in ["Lunas", "Diproses", "Lunas / Diproses"]:
-                st.success("🎉 Pembayaran SAH & LUNAS! Barang Anda sedang dikemas oleh admin.")
+                items_list = json.loads(items_json)
+                for item in items_list:
+                    subtotal_item = item["harga"] * item["jumlah"]
+                    st.write(f"- {item['nama']} (x{item['jumlah']}) — Rp {subtotal_item:,}")
+            except Exception as e:
+                st.write("⚠️ Gagal memuat daftar produk.")
+                
+            # Tombol konfirmasi penyelesaian transaksi di sisi customer
+            if status == "Dikirim":
+                if st.button(f"✅ Konfirmasi Barang Diterima (#{trx_id})", key=f"btn_selesai_{trx_id}"):
+                    conn = sqlite3.connect(DB_NAME)
+                    cursor = conn.cursor()
+                    cursor.execute("UPDATE transaksi SET status = 'Selesai' WHERE id = ?", (trx_id,))
+                    conn.commit()
+                    conn.close()
+                    st.success("Terima kasih sudah berbelanja di Toko Sinar! ❤️")
+                    st.rerun()
