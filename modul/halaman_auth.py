@@ -1,17 +1,16 @@
 import streamlit as st
 import sqlite3
 import random
-import hashlib # 🌟 Murni bawaan Python, anti-bentrok dan memutus Circular Import!
+import hashlib 
 from modul.database import DB_NAME
 
 # ==============================================================================
-# FUNGSI ENKRIPSI MANDIRI (MENGGANTIKAN MODUL KEAMANAN YANG BENTROK)
+# FUNGSI ENKRIPSI MANDIRI 
 # ==============================================================================
 def hash_password_mandiri(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
 def verifikasi_password_mandiri(password_polos: str, password_hashed: str) -> bool:
-    # Jika password di database di-hash dengan SHA256 mandiri atau bcrypt lama
     return hash_password_mandiri(password_polos) == password_hashed
 
 # ==============================================================================
@@ -53,7 +52,7 @@ def simpan_pengguna_baru(username, password_polos, email, role="user"):
     conn.close()
 
 # ==============================================================================
-# 1. HALAMAN LOGIN
+# 1. HALAMAN LOGIN (VERSI AMANKAN PARAMETER URL - ANTI LOGOUT)
 # ==============================================================================
 def render_login():
     st.title("🔑 Login Pengguna")
@@ -67,11 +66,15 @@ def render_login():
         row = cursor.fetchone()
         conn.close()
 
-        # 🌟 PERBAIKAN: Menggunakan verifikasi mandiri bebas impor keamanan
         if row and (verifikasi_password_mandiri(password, row[0]) or password == row[0]):
             st.session_state.login = True
             st.session_state.username = username
             st.session_state.role = row[1]
+            
+            # 🌟 KEAJAIBAN DI SINI: Tanam langsung ke link browser sebelum di-rerun!
+            st.query_params["user"] = username
+            st.query_params["role"] = row[1]
+            
             st.success(f"Selamat datang kembali, {username}!")
             st.rerun()
         else:
@@ -125,7 +128,6 @@ def render_register():
                 
                 st.info("Sedang mengirimkan kode OTP...")
                 try:
-                    # Ganti impor lokal di sini khusus saat pengiriman email OTP agar aman
                     import modul.keamanan as keamanan
                     keamanan.kirim_otp(reg_email, otp_code)
                     st.success("Kode OTP berhasil dikirim! Silakan cek kotak masuk email Anda.")
