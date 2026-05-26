@@ -24,14 +24,15 @@ def cek_email_terdaftar(email):
     return user is not None
 
 # ==============================================================================
-# HALAMAN LOGIN (TOMBOL DI HALAMAN UTAMA)
+# HALAMAN LOGIN (DENGAN KEY UNIK ANTI-BENTROK)
 # ==============================================================================
 def render_login():
     st.title("🔑 Login Pengguna")
-    username = st.text_input("Username", key="login_user")
-    password = st.text_input("Password", type="password", key="login_pass")
+    
+    # Kunci (key) diubah agar unik dan tidak memicu Duplicate Element Key
+    username = st.text_input("Username", key="utama_login_user")
+    password = st.text_input("Password", type="password", key="utama_login_pass")
 
-    # Tombol Masuk Utama
     if st.button("Masuk", type="primary"):
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
@@ -48,19 +49,17 @@ def render_login():
         else:
             st.error("Username atau Password salah!")
             
-    st.write("") # Jeda spasial kecil
+    st.write("") 
     
-    # KEAJAIBAN TATA LETAK: Kita buat 2 kolom tepat di bawah tombol Masuk
+    # Struktur dua tombol sejajar di halaman utama
     col_lupa, col_reg = st.columns([1, 1])
     
     with col_lupa:
-        # Meniru gaya text link dengan st.button biasa (tanpa border tebal pakai bantuan type)
         if st.button("❓ Lupa Password", key="btn_to_forgot"):
             st.session_state.auth_page = "Lupa Password"
             st.rerun()
             
     with col_reg:
-        # Diposisikan di sebelah kanan halaman
         if st.button("📝 Register Akun Baru", key="btn_to_register"):
             st.session_state.auth_page = "Register"
             st.rerun()
@@ -71,11 +70,11 @@ def render_login():
 def render_register():
     st.title("📝 Daftar Akun Baru")
     
-    # ... (Isi logika form register asli/lama kamu taruh di sini, jangan sampai hilang)
-    st.info("Form registrasi akun Anda tampil di sini.")
+    # NOTE: Jika kamu punya form register custom buatanmu sendiri yang memakai OTP, 
+    # silakan masukkan kodenya lengkap di bawah baris ini ya!
+    st.info("Silakan isi formulir pendaftaran akun baru Anda.")
     
     st.divider()
-    # Tombol untuk kembali ke halaman utama login
     if st.button("⬅️ Kembali ke Halaman Login", key="reg_back_login"):
         st.session_state.auth_page = "Login"
         st.rerun()
@@ -103,7 +102,7 @@ def render_lupa_password():
                 st.info("Sedang mengirim OTP ke email Anda...")
                 try:
                     keamanan.kirim_otp(email, otp_code) 
-                    st.success("Kode OTP berhasil dikirim! Silakan cek email Anda.")
+                    st.success("Kode OTP berhasil dikirim! Silakan cek kotak masuk email Anda.")
                     st.session_state.forgot_step = 2
                     st.rerun()
                 except Exception as e:
@@ -125,9 +124,8 @@ def render_lupa_password():
                 st.error("Konfirmasi password tidak cocok!")
             else:
                 update_password_lewat_email(st.session_state.forgot_email, password_baru)
-                st.success("🎉 Password berhasil diubah!")
+                st.success("🎉 Password berhasil diubah! Silakan login.")
                 
-                # Kembalikan state ke mode login bersih
                 st.session_state.forgot_step = 1
                 st.session_state.forgot_email = ""
                 st.session_state.forgot_otp = ""
@@ -135,7 +133,6 @@ def render_lupa_password():
                 st.rerun()
                 
     st.divider()
-    # Tombol darurat kalau pengguna tiba-tiba ingat passwordnya lagi
     if st.button("⬅️ Batalkan, Kembali ke Login", key="forgot_back_login"):
         st.session_state.forgot_step = 1
         st.session_state.auth_page = "Login"
