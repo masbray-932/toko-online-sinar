@@ -3,7 +3,15 @@ import os
 import json
 import sqlite3
 import requests
-import base64  # Tambahkan library ini di bagian paling atas file
+import base64
+import time
+
+# ==============================================================================
+# WAJIB ADA: Import fungsi database agar dikenali oleh halaman_toko.py
+# ==============================================================================
+from modul.database import DB_NAME, save_produk, save_transaksi
+
+# ==============================================================================
 
 # ==============================================================================
 # FUNGSI INTEGRASI API MIDTRANS SANDBOX (VERSI SEMPURNA)
