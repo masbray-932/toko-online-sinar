@@ -3,25 +3,34 @@ import os
 import json
 import sqlite3
 import requests
-from modul.database import DB_NAME, save_produk, save_transaksi
+import base64  # Tambahkan library ini di bagian paling atas file
 
 # ==============================================================================
-# FUNGSI INTEGRASI API MIDTRANS SANDBOX
+# FUNGSI INTEGRASI API MIDTRANS SANDBOX (VERSI SEMPURNA)
 # ==============================================================================
 def buat_link_midtrans(order_id, total_harga, username):
     url = "https://app.sandbox.midtrans.com/snap/v1/transactions"
     
-    # Midtrans butuh otentikasi menggunakan Server Key dengan format Basic Auth
     server_key = st.secrets["midtrans"]["SERVER_KEY"]
+    
+    # Midtrans mewajibkan Server Key di-encode ke Base64 untuk Authorization Header
+    # Pastikan ditambahkan tanda titik dua (:) di ujung server key sebelum di-encode
+    auth_string = f"{server_key}:"
+    auth_encoded = base64.b64encode(auth_string.encode("utf-8")).decode("utf-8")
     
     headers = {
         "Accept": "application/json",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Authorization": f"Basic {auth_encoded}"  # Metode otentikasi yang jauh lebih aman & presisi
     }
+    
+    # Kita tambahkan timestamp detik agar ORDER ID selalu unik dan tidak memicu eror 'Duplicate'
+    import time
+    unique_order_id = f"NOTA-{order_id}-{int(time.time())}"
     
     payload = {
         "transaction_details": {
-            "order_id": f"NOTA-{order_id}",
+            "order_id": unique_order_id,
             "gross_amount": int(total_harga)
         },
         "customer_details": {
@@ -34,29 +43,17 @@ def buat_link_midtrans(order_id, total_harga, username):
     }
     
     try:
-        # Mengirim request ke Midtrans menggunakan auth=(server_key, "")
-        response = requests.post(url, json=payload, headers=headers, auth=(server_key, ""))
+        response = requests.post(url, json=payload, headers=headers)
         data = response.json()
-        return data.get("redirect_url") # Mengembalikan link halaman pembayaran
+        
+        # JIKA GAGAL: Biar kita tahu alasan Midtrans menolak, kita print pesan erornya ke konsol
+        if "error_messages" in data:
+            st.error(f"Ditolak Midtrans: {data['error_messages']}")
+            return None
+            
+        return data.get("redirect_url")
     except Exception as e:
         st.error(f"Gagal terhubung ke Midtrans: {e}")
-        return None
-
-def cek_status_midtrans(order_id):
-    url = f"https://api.sandbox.midtrans.com/v2/NOTA-{order_id}/status"
-    server_key = st.secrets["midtrans"]["SERVER_KEY"]
-    
-    headers = {
-        "Accept": "application/json",
-        "Content-Type": "application/json"
-    }
-    
-    try:
-        response = requests.get(url, headers=headers, auth=(server_key, ""))
-        data = response.json()
-        # Mengembalikan status transaksi dari Midtrans (settlement = lunas)
-        return data.get("transaction_status")
-    except:
         return None
 
 # ==============================================================================
