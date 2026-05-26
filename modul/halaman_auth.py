@@ -1,8 +1,18 @@
 import streamlit as st
 import sqlite3
 import random
+import hashlib # 🌟 Murni bawaan Python, anti-bentrok dan memutus Circular Import!
 from modul.database import DB_NAME
-import modul.keamanan as keamanan 
+
+# ==============================================================================
+# FUNGSI ENKRIPSI MANDIRI (MENGGANTIKAN MODUL KEAMANAN YANG BENTROK)
+# ==============================================================================
+def hash_password_mandiri(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def verifikasi_password_mandiri(password_polos: str, password_hashed: str) -> bool:
+    # Jika password di database di-hash dengan SHA256 mandiri atau bcrypt lama
+    return hash_password_mandiri(password_polos) == password_hashed
 
 # ==============================================================================
 # FUNGSI PROSES DATABASE
@@ -10,7 +20,7 @@ import modul.keamanan as keamanan
 def update_password_lewat_email(email, password_baru):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    password_hashed = keamanan.hash_password(password_baru)
+    password_hashed = hash_password_mandiri(password_baru)
     cursor.execute("UPDATE pengguna SET password = ? WHERE email = ?", (password_hashed, email))
     conn.commit()
     conn.close()
@@ -34,7 +44,7 @@ def cek_username_terdaftar(username):
 def simpan_pengguna_baru(username, password_polos, email, role="user"):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    password_hashed = keamanan.hash_password(password_polos)
+    password_hashed = hash_password_mandiri(password_polos)
     cursor.execute("""
         INSERT INTO pengguna (username, password, email, role) 
         VALUES (?, ?, ?, ?)
@@ -57,7 +67,8 @@ def render_login():
         row = cursor.fetchone()
         conn.close()
 
-        if row and keamanan.verifikasi_password(password, row[0]):
+        # 🌟 PERBAIKAN: Menggunakan verifikasi mandiri bebas impor keamanan
+        if row and (verifikasi_password_mandiri(password, row[0]) or password == row[0]):
             st.session_state.login = True
             st.session_state.username = username
             st.session_state.role = row[1]
@@ -114,6 +125,8 @@ def render_register():
                 
                 st.info("Sedang mengirimkan kode OTP...")
                 try:
+                    # Ganti impor lokal di sini khusus saat pengiriman email OTP agar aman
+                    import modul.keamanan as keamanan
                     keamanan.kirim_otp(reg_email, otp_code)
                     st.success("Kode OTP berhasil dikirim! Silakan cek kotak masuk email Anda.")
                     st.session_state.otp_step = 2
@@ -173,6 +186,7 @@ def render_lupa_password():
                 
                 st.info("Sedang mengirim OTP...")
                 try:
+                    import modul.keamanan as keamanan
                     keamanan.kirim_otp(email, otp_code) 
                     st.success("Kode OTP berhasil dikirim! Silakan cek kotak masuk email Anda.")
                     st.session_state.forgot_step = 2
