@@ -21,15 +21,14 @@ def buat_link_midtrans(order_id, total_harga, username):
     
     server_key = st.secrets["midtrans"]["SERVER_KEY"]
     
-    # Midtrans mewajibkan Server Key di-encode ke Base64 untuk Authorization Header
-    # Pastikan ditambahkan tanda titik dua (:) di ujung server key sebelum di-encode
+    # PERBAIKAN: Kita langsung ambil string asli dari secrets kamu tanpa dipaksa diubah-ubah lagi
     auth_string = f"{server_key}:"
     auth_encoded = base64.b64encode(auth_string.encode("utf-8")).decode("utf-8")
     
     headers = {
         "Accept": "application/json",
         "Content-Type": "application/json",
-        "Authorization": f"Basic {auth_encoded}"  # Metode otentikasi yang jauh lebih aman & presisi
+        "Authorization": f"Basic {auth_encoded}"
     }
     
     # Kita tambahkan timestamp detik agar ORDER ID selalu unik dan tidak memicu eror 'Duplicate'
