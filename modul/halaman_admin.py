@@ -164,27 +164,12 @@ def render_admin():
             st.info("Belum ada produk di dalam gudang.")
 
     # ==============================================================================
-    # 🌟 TAB 3: LIVE CHAT DENGAN CUSTOMER (VERSI DETEKTIF PELACAK DATA)
+    # 🌟 TAB 3: LIVE CHAT DENGAN CUSTOMER (VERSI AUTO-REFRESH REALTIME)
     # ==============================================================================
     with tab_chat_customer:
         st.subheader("💬 Pusat Bantuan & Chat Customer")
         
-        # 🕵️‍♂️ KODE MATA-MATA DETEKTIF: Intip isi seluruh isi tabel database chat secara mentah
-        st.write("🔍 **Isi Tabel Database Mentah (Mata-mata):**")
-        try:
-            conn = sqlite3.connect(DB_NAME)
-            df_mentah = pd.read_sql_query("SELECT * FROM pesan_chat", conn)
-            conn.close()
-            if df_mentah.empty:
-                st.warning("⚠️ Waduh! Di database server ini, tabel 'pesan_chat' beneran KOSONG MELONGPONG, Bestie! Data chat tidak pernah tersimpan.")
-            else:
-                st.dataframe(df_mentah, use_container_width=True) # Tampilkan tabel data asli jika ada
-        except Exception as err:
-            st.error(f"Gagal mengintip database: {err}")
-            
-        st.divider() # Batas akhir kode mata-mata
-        
-        # --- SISA KODE PENAMPIL CHAT YANG LAMA (BIARKAN DI BAWAHNYA) ---
+        # Tarik daftar user unik yang beneran pernah nge-chat
         try:
             conn = sqlite3.connect(DB_NAME)
             cursor = conn.cursor()
@@ -202,28 +187,43 @@ def render_admin():
             st.info("📭 Belum ada pesan chat masuk dari customer mana pun.")
         else:
             col_pilih, col_info = st.columns([2, 3])
+            
             with col_pilih:
                 st.write("📁 **Daftar Obrolan Aktif:**")
-                customer_dipilih = st.radio("Customer aktif:", options=pilihan_customer, label_visibility="collapsed", key="admin_radio_chat_active")
+                customer_dipilih = st.radio(
+                    "Pilih customer:",
+                    options=pilihan_customer,
+                    label_visibility="collapsed",
+                    key="admin_radio_chat_realtime"
+                )
                 
             with col_info:
                 st.write(f"💬 **Ruang Obrolan Bersama:** `{customer_dipilih}`")
+                st.caption("🔄 *Otomatis mengecek pesan masuk baru...*")
                 st.divider()
-                riwayat_chat_admin = ambil_chat_antara("admin", customer_dipilih)
                 
-                wadah_chat_admin = st.container(height=300, border=True)
-                with wadah_chat_admin:
-                    if not riwayat_chat_admin:
-                        st.info(f"Belum ada riwayat obrolan dengan {customer_dipilih}.")
-                    else:
-                        for chat in riwayat_chat_admin:
-                            role_tampilan = "user" if chat["pengirim"] == "admin" else "assistant"
-                            nama_label = "🤵 Anda (Admin)" if chat["pengirim"] == "admin" else f"👤 {chat['pengirim']}"
-                            with st.chat_message(role_tampilan):
-                                st.write(f"**{nama_label}** <small style='color:gray;'>({chat['tanggal']})</small>", unsafe_allow_html=True)
-                                st.write(chat["teks"])
+                # 🌟 TRICK MAGIC: Buat fungsi internal ber-fragment agar otomatis berputar setiap 3 detik
+                @st.fragment(run_every=3)
+                def render_area_chat_admin(target_user):
+                    riwayat_chat_admin = ambil_chat_antara("admin", target_user)
+                    wadah_chat_admin = st.container(height=350, border=True)
+                    with wadah_chat_admin:
+                        if not riwayat_chat_admin:
+                            st.info(f"Belum ada riwayat obrolan dengan {target_user}.")
+                        else:
+                            for chat in riwayat_chat_admin:
+                                role_tampilan = "user" if chat["pengirim"] == "admin" else "assistant"
+                                nama_label = "🤵 Anda (Admin)" if chat["pengirim"] == "admin" else f"👤 {chat['pengirim']}"
+                                
+                                with st.chat_message(role_tampilan):
+                                    st.write(f"**{nama_label}** <small style='color:gray;'>({chat['tanggal']})</small>", unsafe_allow_html=True)
+                                    st.write(chat["teks"])
                 
-                balasan_admin = st.chat_input(f"Balas ke {customer_dipilih}...", key="input_balasan_admin_fix")
+                # Panggil area obrolan berkala
+                render_area_chat_admin(customer_dipilih)
+                
+                # Kotak input ditaruh di luar agar aman diketik kapan saja
+                balasan_admin = st.chat_input(f"Balas ke {customer_dipilih}...", key="input_balasan_admin_realtime")
                 if balasan_admin:
                     simpan_chat(pengirim="admin", penerima=customer_dipilih, teks=balasan_admin)
                     st.rerun()
