@@ -28,7 +28,7 @@ def init_db():
     try:
         cursor.execute("SELECT role FROM pengguna LIMIT 1")
     except sqlite3.OperationalError:
-        st.info("Sistem mendeteksi pembaruan database, menyinkronkan kolom 'role'...")
+        print("Sistem mendeteksi pembaruan database, menyinkronkan kolom 'role'...")
         cursor.execute("ALTER TABLE pengguna ADD COLUMN role TEXT DEFAULT 'user'")
         conn.commit()
 
