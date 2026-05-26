@@ -9,7 +9,7 @@ from modul.halaman_admin import render_admin
 def hash_password_mandiri(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
-# 1. Jalankan Inisialisasi Database
+# 1. Jalankan Inisialisasi Database Utama
 init_db()
 
 # 👑 BUAT AKUN ADMIN OTOMATIS
@@ -25,7 +25,16 @@ if not cursor.fetchone():
     conn.commit()
 conn.close()
 
-# 2. Inisialisasi Session State Dasar
+# ==============================================================================
+# 🌟 STRUKTUR MANAJEMEN SESI SAKTI (ANTI-RESET REFRESH)
+# ==============================================================================
+# Kita gunakan parameter URL sebagai pelapis cadangan utama yang sinkron
+if "user" in st.query_params and "role" in st.query_params:
+    st.session_state["login"] = True
+    st.session_state["username"] = st.query_params["user"]
+    st.session_state["role"] = st.query_params["role"]
+
+# Inisialisasi Session State Dasar jika benar-benar kosong
 if "login" not in st.session_state: st.session_state.login = False
 if "username" not in st.session_state: st.session_state.username = ""
 if "role" not in st.session_state: st.session_state.role = ""
@@ -40,24 +49,14 @@ if "keranjang" not in st.session_state:
     st.session_state.keranjang = []
 
 # ==============================================================================
-# 🌟 KEAJAIBAN ANTI-LOGOUT: Ambil Data Langsung dari Parameter URL Browser
-# ==============================================================================
-# Jika di URL terdeteksi ada akun, langsung paksa pertahankan status loginnya!
-if "user" in st.query_params and "role" in st.query_params:
-    st.session_state.login = True
-    st.session_state.username = st.query_params["user"]
-    st.session_state.role = st.query_params["role"]
-
-# ==============================================================================
 # ALUR TAMPILAN HALAMAN
 # ==============================================================================
 if not st.session_state.login:
     if st.session_state.auth_page == "Login":
         render_login()
         
-        # SENSOR PINTAR: Jika login baru saja sukses di halaman render_login
+        # Jika login sukses dari fungsi render_login, langsung kunci di URL & State
         if st.session_state.login:
-            # Tanam data login langsung ke dalam parameter URL browser
             st.query_params["user"] = st.session_state.username
             st.query_params["role"] = st.session_state.role
             st.rerun()
@@ -79,9 +78,9 @@ else:
         
     menu = st.sidebar.radio("Pilih Halaman", list_menu)
     
-    # 🌟 TOMBOL LOGOUT: Bersihkan URL browser kembali menjadi normal kosong
+    # TOMBOL LOGOUT: Bersihkan parameter dan memori total
     if st.sidebar.button("Logout"):
-        st.query_params.clear() # Hapus parameter URL total
+        st.query_params.clear()
         st.session_state.login = False
         st.session_state.username = ""
         st.session_state.role = ""
