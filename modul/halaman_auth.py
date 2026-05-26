@@ -5,7 +5,7 @@ import hashlib
 from modul.database import DB_NAME
 
 # ==============================================================================
-# FUNGSI ENKRIPSI MANDIRI 
+# FUNGSI ENKRIPSI MANDIRI (AMAN & ANTI-BENTROK CIRCULAR IMPORT)
 # ==============================================================================
 def hash_password_mandiri(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
@@ -14,7 +14,7 @@ def verifikasi_password_mandiri(password_polos: str, password_hashed: str) -> bo
     return hash_password_mandiri(password_polos) == password_hashed
 
 # ==============================================================================
-# FUNGSI PROSES DATABASE
+# FUNGSI PROSES DATABASE AUTENTIKASI
 # ==============================================================================
 def update_password_lewat_email(email, password_baru):
     conn = sqlite3.connect(DB_NAME)
@@ -52,7 +52,7 @@ def simpan_pengguna_baru(username, password_polos, email, role="user"):
     conn.close()
 
 # ==============================================================================
-# 1. HALAMAN LOGIN (VERSI AMANKAN PARAMETER URL - ANTI LOGOUT)
+# 1. HALAMAN LOGIN (SINKRONISASI TOKEN ANTI-COPAS BROWSER LAIN)
 # ==============================================================================
 def render_login():
     st.title("🔑 Login Pengguna")
@@ -71,9 +71,12 @@ def render_login():
             st.session_state.username = username
             st.session_state.role = row[1]
             
-            # 🌟 KEAJAIBAN DI SINI: Tanam langsung ke link browser sebelum di-rerun!
-            st.query_params["user"] = username
-            st.query_params["role"] = row[1]
+            # 🌟 PROTEKSI MURNI: Tanam token pelindung sebelum halaman dimuat ulang (rerun)
+            if "server_secret_seed" in st.session_state:
+                token_baru = hashlib.md5(f"{username}_{st.session_state['server_secret_seed']}".encode()).hexdigest()
+                st.query_params["user"] = username
+                st.query_params["role"] = row[1]
+                st.query_params["token"] = token_baru
             
             st.success(f"Selamat datang kembali, {username}!")
             st.rerun()
