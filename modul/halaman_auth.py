@@ -52,7 +52,7 @@ def simpan_pengguna_baru(username, password_polos, email, role="user"):
     conn.close()
 
 # ==============================================================================
-# 1. HALAMAN LOGIN (SINKRONISASI TOKEN ANTI-COPAS BROWSER LAIN)
+# 1. HALAMAN LOGIN (SINKRONISASI TOKEN AMAN DENGAN SECRETS)
 # ==============================================================================
 def render_login():
     st.title("🔑 Login Pengguna")
@@ -71,12 +71,13 @@ def render_login():
             st.session_state.username = username
             st.session_state.role = row[1]
             
-            # 🌟 PROTEKSI MURNI: Tanam token pelindung sebelum halaman dimuat ulang (rerun)
-            if "server_secret_seed" in st.session_state:
-                token_baru = hashlib.md5(f"{username}_{st.session_state['server_secret_seed']}".encode()).hexdigest()
-                st.query_params["user"] = username
-                st.query_params["role"] = row[1]
-                st.query_params["token"] = token_baru
+            # 🌟 AMANKAN TOKEN: Gunakan kunci tetap dari Secrets agar tidak ter-logout saat refresh
+            seed_tetap = st.secrets.get("TOKEN_SECRET_SEED", "KunciCadanganSinarBintangPermanen99")
+            token_baru = hashlib.md5(f"{username}_{seed_tetap}".encode()).hexdigest()
+            
+            st.query_params["user"] = username
+            st.query_params["role"] = row[1]
+            st.query_params["token"] = token_baru
             
             st.success(f"Selamat datang kembali, {username}!")
             st.rerun()
