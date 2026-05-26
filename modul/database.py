@@ -9,7 +9,7 @@ from PIL import Image
 DB_NAME = "toko_online.db"
 
 # ==============================================================================
-# FUNGSI INISIALISASI DATABASE UTAMA
+# FUNGSI INISIALISASI DATABASE UTAMA (VERSI LOGISTIK MUTAKHIR)
 # ==============================================================================
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -24,7 +24,7 @@ def init_db():
         )
     """)
     
-    # 2. FITUR AUTO-FIX Kolom Role
+    # 2. FITUR AUTO-FIX Kolom Role pada Tabel Pengguna
     try:
         cursor.execute("SELECT role FROM pengguna LIMIT 1")
     except sqlite3.OperationalError:
@@ -42,7 +42,7 @@ def init_db():
         )
     """)
 
-    # 4. Pastikan tabel transaksi sudah siap
+    # 4. Pastikan tabel transaksi sudah siap (Lengkap dengan kolom kurir dan resi default)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS transaksi (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,9 +51,13 @@ def init_db():
             items TEXT,
             total_bayar REAL,
             status TEXT DEFAULT 'Belum Bayar',
-            bukti_transfer TEXT
+            bukti_transfer TEXT,
+            kurir TEXT DEFAULT '-',
+            no_resi TEXT DEFAULT '-'
         )
     """)
+    
+    # 5. Pastikan tabel pesan chat sudah siap
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS pesan_chat (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,6 +67,17 @@ def init_db():
             tanggal TEXT
         )
     """)
+    
+    # ==============================================================================
+    # 🌟 FITUR AUTO-FIX LOGISTIK: SINKRONISASI TRANSMISI JIKA MENGGUNAKAN DB LAMA
+    # ==============================================================================
+    try:
+        cursor.execute("SELECT kurir FROM transaksi LIMIT 1")
+    except sqlite3.OperationalError:
+        print("Sistem mendeteksi database lama, menyuntikkan kolom 'kurir' dan 'no_resi'...")
+        cursor.execute("ALTER TABLE transaksi ADD COLUMN kurir TEXT DEFAULT '-'")
+        cursor.execute("ALTER TABLE transaksi ADD COLUMN no_resi TEXT DEFAULT '-'")
+        conn.commit()
     
     conn.commit()
     conn.close()
@@ -122,8 +137,8 @@ def save_transaksi(username, keranjang, total_bayar):
     items_json_string = json.dumps(keranjang)
     waktu_sekarang = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cursor.execute("""
-        INSERT INTO transaksi (username, tanggal, items, total_bayar, bukti_transfer, status) 
-        VALUES (?, ?, ?, ?, NULL, 'Belum Bayar')
+        INSERT INTO transaksi (username, tanggal, items, total_bayar, bukti_transfer, status, kurir, no_resi) 
+        VALUES (?, ?, ?, ?, NULL, 'Belum Bayar', '-', '-')
     """, (username, waktu_sekarang, items_json_string, int(total_bayar)))
     conn.commit()
     conn.close()
@@ -161,12 +176,11 @@ def buat_invoice_pdf(id_transaksi):
     pdf.cell(100, 7, text=f"ID Invoice: #TS-{id_transaksi}", ln=False)
     pdf.cell(90, 7, text=f"Tanggal: {tanggal}", ln=True, align="R")
     
-    pdf.set_font("Arial", size=11)
     pdf.cell(100, 7, text=f"Pelanggan: {username}", ln=False)
     pdf.set_font("Arial", "B", 11)
     
     # Status warna teks
-    if status in ["Lunas", "Diproses", "Lunas / Diproses"]:
+    if status in ["Lunas", "Diproses", "Lunas / Diproses", "Siap di-Jemput", "Dikirim", "Selesai"]:
         pdf.set_text_color(0, 128, 0)
     else:
         pdf.set_text_color(255, 0, 0)
@@ -231,6 +245,7 @@ def proses_dan_simpan_foto(file_diunggah, nama_produk):
         img_resized.save(jalur_simpan, "JPEG", quality=85)
         
     return jalur_simpan
+
 # ==============================================================================
 # FUNGSI LIVE CHAT LOKAL (CUSTOMER & ADMIN)
 # ==============================================================================
