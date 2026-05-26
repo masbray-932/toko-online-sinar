@@ -12,16 +12,14 @@ import time
 from modul.database import DB_NAME, save_produk, save_transaksi
 
 # ==============================================================================
-
-# ==============================================================================
-# FUNGSI INTEGRASI API MIDTRANS SANDBOX (VERSI SEMPURNA)
+# 1. FUNGSI INTEGRASI API MIDTRANS SANDBOX (VERSI UTUH & SEMPURNA)
 # ==============================================================================
 def buat_link_midtrans(order_id, total_harga, username):
     url = "https://app.sandbox.midtrans.com/snap/v1/transactions"
     
     server_key = st.secrets["midtrans"]["SERVER_KEY"]
     
-    # PERBAIKAN: Kita langsung ambil string asli dari secrets kamu tanpa dipaksa diubah-ubah lagi
+    # Langsung ambil string asli dari secrets tanpa dipaksa diubah huruf besar/kecil
     auth_string = f"{server_key}:"
     auth_encoded = base64.b64encode(auth_string.encode("utf-8")).decode("utf-8")
     
@@ -31,8 +29,7 @@ def buat_link_midtrans(order_id, total_harga, username):
         "Authorization": f"Basic {auth_encoded}"
     }
     
-    # Kita tambahkan timestamp detik agar ORDER ID selalu unik dan tidak memicu eror 'Duplicate'
-    import time
+    # Tambahkan timestamp detik agar ORDER ID selalu unik di server Midtrans
     unique_order_id = f"NOTA-{order_id}-{int(time.time())}"
     
     payload = {
@@ -53,7 +50,6 @@ def buat_link_midtrans(order_id, total_harga, username):
         response = requests.post(url, json=payload, headers=headers)
         data = response.json()
         
-        # JIKA GAGAL: Biar kita tahu alasan Midtrans menolak, kita print pesan erornya ke konsol
         if "error_messages" in data:
             st.error(f"Ditolak Midtrans: {data['error_messages']}")
             return None
@@ -64,7 +60,30 @@ def buat_link_midtrans(order_id, total_harga, username):
         return None
 
 # ==============================================================================
-# HALAMAN KATALOG BELANJA
+# 2. FUNGSI CEK STATUS PEMBAYARAN MIDTRANS (VERSI SEHAT)
+# ==============================================================================
+def cek_status_midtrans(order_id):
+    url = f"https://api.sandbox.midtrans.com/v2/NOTA-{order_id}/status"
+    server_key = st.secrets["midtrans"]["SERVER_KEY"]
+    
+    auth_string = f"{server_key}:"
+    auth_encoded = base64.b64encode(auth_string.encode("utf-8")).decode("utf-8")
+    
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Authorization": f"Basic {auth_encoded}"
+    }
+    
+    try:
+        response = requests.get(url, headers=headers)
+        data = response.json()
+        return data.get("transaction_status")
+    except:
+        return None
+
+# ==============================================================================
+# 3. HALAMAN KATALOG BELANJA
 # ==============================================================================
 def render_belanja():
     st.title("🛒 Toko Online Sinar")
@@ -74,6 +93,7 @@ def render_belanja():
 
     if not produk_ditampilkan:
         st.info("Produk tidak ditemukan.")
+        return
     
     for item in produk_ditampilkan:
         jumlah_di_keranjang = sum(k["jumlah"] for k in st.session_state.keranjang if k["nama"] == item["nama"])
@@ -105,7 +125,7 @@ def render_belanja():
         st.divider()
 
 # ==============================================================================
-# HALAMAN KERANJANG & CHECKOUT
+# 4. HALAMAN KERANJANG & CHECKOUT
 # ==============================================================================
 def render_keranjang():
     st.title("🛍️ Keranjang Belanja Anda")
@@ -179,7 +199,7 @@ def render_keranjang():
             # 1. Simpan pesanan dulu ke database lokal
             save_transaksi(st.session_state.username, st.session_state.keranjang, total_akhir)
             
-            # 2. Ambit ID Transaksi terakhir yang barusan dibuat
+            # 2. Ambil ID Transaksi terakhir yang barusan dibuat
             conn = sqlite3.connect(DB_NAME)
             cursor = conn.cursor()
             cursor.execute("SELECT max(id) FROM transaksi WHERE username = ?", (st.session_state.username,))
@@ -206,7 +226,7 @@ def render_keranjang():
                 st.error("Gagal membuat link pembayaran, silakan hubungi admin.")
 
 # ==============================================================================
-# HALAMAN RIWAYAT BELANJA (OTOMATIS)
+# 5. HALAMAN RIWAYAT BELANJA (OTOMATIS)
 # ==============================================================================
 def render_riwayat():
     st.title("📜 Riwayat Belanja & Pembayaran")
@@ -239,17 +259,14 @@ def render_riwayat():
             if status == "Belum Bayar":
                 st.warning("Silakan selesaikan pembayaran otomatis Anda melalui tombol di bawah:")
                 
-                # Tombol mengarah langsung ke gerbang pembayaran Midtrans Snap PopUp
                 if link_midtrans:
                     st.link_button("💳 Bayar Otomatis Sekarang", url=link_midtrans, type="primary")
                 
                 st.write("")
-                # Tombol Cek Status untuk mengecek apakah pembeli sudah bayar di simulator
                 if st.button("🔄 Cek Status Pembayaran", key=f"cek_{nota_id}"):
                     status_terbaru = cek_status_midtrans(nota_id)
                     
                     if status_terbaru in ["settlement", "capture"]:
-                        # Jika di simulator sukses dibayar, ubah database kita jadi Lunas!
                         conn = sqlite3.connect(DB_NAME)
                         cursor = conn.cursor()
                         cursor.execute("UPDATE transaksi SET status = 'Lunas / Diproses' WHERE id = ?", (nota_id,))
