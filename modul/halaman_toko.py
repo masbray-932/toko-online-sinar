@@ -11,17 +11,16 @@ from modul.database import DB_NAME, save_produk, save_transaksi, buat_invoice_pd
 # ==============================================================================
 # 1. FUNGSI INTEGRASI API MIDTRANS SANDBOX
 # ==============================================================================
+# ==============================================================================
+# 1. FUNGSI INTEGRASI API MIDTRANS (VERSI DIRECT PRODUCTION URL)
+# ==============================================================================
 def buat_link_midtrans(order_id, total_harga, username):
-    # 1. Tetap gunakan URL Sandbox karena di dashboard kamu tertulis Sandbox
-    url = "https://app.sandbox.midtrans.com/snap/v1/transactions"
+    # 🌟 URL DIUBAH: Menggunakan app.midtrans.com agar sinkron dengan kunci 'Mid-server-'
+    url = "https://app.midtrans.com/snap/v1/transactions"
     
-    # 2. Tarik kunci dari st.secrets (Pastikan di secrets Streamlit Cloud nilainya sudah terpasang)
     server_key = st.secrets["midtrans"]["SERVER_KEY"]
-    
-    # 🌟 TRIK AMPUH: Pastikan tidak ada spasi sisa atau karakter '\n' tersembunyi
     server_key = server_key.strip()
     
-    # 3. Proses Enkripsi Basic Auth Midtrans
     auth_string = f"{server_key}:"
     auth_encoded = base64.b64encode(auth_string.encode("utf-8")).decode("utf-8")
     
@@ -64,7 +63,8 @@ def buat_link_midtrans(order_id, total_harga, username):
 # 2. FUNGSI CEK STATUS PEMBAYARAN MIDTRANS
 # ==============================================================================
 def cek_status_midtrans(order_id):
-    url = f"https://api.sandbox.midtrans.com/v2/NOTA-{order_id}/status"
+    # 🌟 URL DIUBAH: Menggunakan api.midtrans.com agar sinkron dengan kunci 'Mid-server-'
+    url = f"https://api.midtrans.com/v2/NOTA-{order_id}/status"
     server_key = st.secrets["midtrans"]["SERVER_KEY"]
     
     auth_string = f"{server_key}:"
