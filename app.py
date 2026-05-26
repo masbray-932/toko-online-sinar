@@ -50,17 +50,26 @@ url_user = st.query_params.get("user")
 url_role = st.query_params.get("role")
 url_token = st.query_params.get("token")
 
-if url_user and url_role and url_token:
+# 🌟 FIX LOGIKA: Validasi token hanya dipicu jika parameter di URL beneran lengkap ada isinya
+if url_user and url_role:
     token_validasi_internal = hashlib.md5(f"{url_user}_{st.session_state['server_secret_seed']}".encode()).hexdigest()
-    if url_token == token_validasi_internal:
-        st.session_state.login = True
-        st.session_state.username = url_user
-        st.session_state.role = url_role
-    else:
+    
+    if url_token:
+        if url_token == token_validasi_internal:
+            st.session_state.login = True
+            st.session_state.username = url_user
+            st.session_state.role = url_role
+        else:
+            # Token salah (Kasus: Link bajakan dicopas ke browser lain) -> TENDANG!
+            st.query_params.clear()
+            st.session_state.login = False
+            st.session_state.username = ""
+            st.session_state.role = ""
+            st.rerun()
+    elif not st.session_state.login:
+        # Ada parameter user tapi gada token, dan status memori belum login -> Bersihkan!
         st.query_params.clear()
-        st.session_state.login = False
-        st.session_state.username = ""
-        st.session_state.role = ""
+        st.rerun()
 
 # ==============================================================================
 # ALUR TAMPILAN HALAMAN
@@ -68,12 +77,6 @@ if url_user and url_role and url_token:
 if not st.session_state.login:
     if st.session_state.auth_page == "Login":
         render_login()
-        if st.session_state.login:
-            token_baru = hashlib.md5(f"{st.session_state.username}_{st.session_state['server_secret_seed']}".encode()).hexdigest()
-            st.query_params["user"] = st.session_state.username
-            st.query_params["role"] = st.session_state.role
-            st.query_params["token"] = token_baru  
-            st.rerun()
     elif st.session_state.auth_page == "Register":
         render_register()
     elif st.session_state.auth_page == "Lupa Password":
@@ -106,7 +109,6 @@ else:
     elif menu == "Riwayat Belanja": 
         render_riwayat() 
     elif menu == "💬 Chat Admin":
-        # 🌟 AMAN: Impor dipanggil di sini dari file independen baru
         from modul.halaman_chat import render_chat_admin
         render_chat_admin()
     elif menu == "Admin Panel" and st.session_state.role == "admin": 
