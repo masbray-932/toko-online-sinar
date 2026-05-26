@@ -1,17 +1,21 @@
-import streamlit as st
+import streamlit as st  
 import sqlite3
 import json
 import pandas as pd
-from modul.database import DB_NAME, load_produk, save_produk
+from modul.database import DB_NAME, load_produk, save_produk, load_users, save_users, ambil_chat_antara, simpan_chat
 
 def render_admin():
     st.title("👑 Panel Kendali Admin")
     
-    # KITA BUAT TAB AGAR TAMPILAN ADMIN RAPI
-    tab_dashboard, tab_kelola_stok = st.tabs(["📊 Dashboard Analisis", "📦 Kelola Stok Produk"])
+    # 🌟 SEKARANG KITA BUAT 5 TAB AGAR INTEGRASI LIVE CHAT MASUK DENGAN RAPI
+    tab_dashboard, tab_kelola_stok, tab_chat_customer = st.tabs([
+        "📊 Dashboard Analisis", 
+        "📦 Kelola Stok Produk", 
+        "💬 Chat Customer"
+    ])
     
     # ==============================================================================
-    # TAB 1: DASHBOARD ANALISIS & GRAFIK (SUDAH AMAN & BEBAS EROR)
+    # TAB 1: DASHBOARD ANALISIS & GRAFIK
     # ==============================================================================
     with tab_dashboard:
         st.subheader("📈 Analisis Performa Penjualan")
@@ -61,7 +65,8 @@ def render_admin():
                     df_transaksi[['id', 'tanggal', 'total_bayar']].rename(
                         columns={'id': 'ID Nota', 'tanggal': 'Tanggal', 'total_bayar': 'Total Bayar (Rp)'}
                     ),
-                    use_container_width=True
+                    use_container_width=True,
+                    hide_index=True
                 )
         except Exception as e:
             st.warning("⚠️ Sistem dashboard belum bisa memuat data harian. Selesaikan 1 transaksi QRIS terlebih dahulu untuk memicu pembuatan data.")
@@ -78,7 +83,7 @@ def render_admin():
             harga_produk = st.number_input("Harga Produk (Rp)", min_value=0, step=1000, key="admin_harga_produk")
             stok_produk = st.number_input("Jumlah Stok Awal", min_value=0, step=1, key="admin_stok_produk")
             
-            # 🌟 PERBAIKAN: Ubah ketikan teks URL menjadi File Uploader Gambar asli!
+            # File Uploader Gambar Asli Otomatis Terkoneksi Pillow
             foto_diunggah = st.file_uploader("Unggah Foto Produk (Bebas dari HP / Laptop)", type=["jpg", "jpeg", "png"], key="admin_file_foto")
             
             if st.button("Simpan Produk", type="primary"):
@@ -93,7 +98,6 @@ def render_admin():
                     if any(p["nama"].lower() == nama_produk.lower() for p in produk_gudang):
                         st.error("Produk dengan nama tersebut sudah ada!")
                     else:
-                        # Panggil fungsi kompresi gambar otomatis kita dari database.py
                         from modul.database import proses_dan_simpan_foto
                         
                         st.info("Sedang memproses dan mengecilkan ukuran fotomu...")
@@ -106,7 +110,7 @@ def render_admin():
                                 "nama": nama_produk,
                                 "harga": int(harga_produk),
                                 "stok": int(stok_produk),
-                                "foto": jalur_foto_lokal  # Hasilnya otomatis jadi 'assets/nama_barang.jpg'
+                                "foto": jalur_foto_lokal  
                             })
                             st.session_state.produk = produk_gudang
                             save_produk(produk_gudang)
@@ -120,10 +124,9 @@ def render_admin():
         st.caption("💡 Centang kotak **'Pilih'** di bawah untuk melakukan aksi hapus, atau kamu bisa edit langsung isi kolom Harga & Stok di tabel!")
         
         if st.session_state.produk:
-            # Ubah list produk menjadi DataFrame pandas
             df_asal = pd.DataFrame(st.session_state.produk)
             
-            # Sisipkan kolom Checkbox tiruan bernama 'Pilih' di urutan paling kiri
+            # Sisipkan kolom Checkbox 'Pilih' di urutan paling kiri
             df_asal.insert(0, "Pilih", False)
             
             # TAMPILKAN TABEL EDITOR INTERAKTIF DENGAN CHECKBOX
@@ -133,20 +136,17 @@ def render_admin():
                 use_container_width=True,
                 column_config={
                     "Pilih": st.column_config.CheckboxColumn("Pilih", help="Centang untuk memilih barang", default=False),
-                    "nama": st.column_config.TextColumn("Nama Produk", disabled=True), # Nama barang dikunci biar ga rusak
+                    "nama": st.column_config.TextColumn("Nama Produk", disabled=True), 
                     "harga": st.column_config.NumberColumn("Harga (Rp)", min_value=0, format="Rp %d"),
                     "stok": st.column_config.NumberColumn("Stok Gudang", min_value=0),
                     "foto": st.column_config.TextColumn("Link Foto URL")
                 }
             )
             
-            # BUAT DUA TOMBOL AKSI DI BAWAH TABEL
             col_save_edit, col_delete = st.columns([1, 1])
             
             with col_save_edit:
-                # AKSI 1: SIMPAN PERUBAHAN EDIT LANGSUNG DARI TABEL
                 if st.button("💾 Simpan Semua Perubahan Edit", type="primary", use_container_width=True):
-                    # Kembalikan DataFrame yang diedit menjadi format list-dict produk (buang kolom 'Pilih')
                     produk_terupdate = df_diedit.drop(columns=["Pilih"]).to_dict(orient="records")
                     st.session_state.produk = produk_terupdate
                     save_produk(produk_terupdate)
@@ -154,16 +154,11 @@ def render_admin():
                     st.rerun()
                     
             with col_delete:
-                # AKSI 2: HAPUS MASAL PRODUK YANG DICENTANG CHKBOX-NYA
-                # Filter baris mana saja yang kolom 'Pilih'-nya bernilai True
                 item_dicentang = df_diedit[df_diedit["Pilih"] == True]
-                
                 label_hapus = f"🗑️ Hapus {len(item_dicentang)} Barang Terpilih" if not item_dicentang.empty else "🗑️ Hapus Barang Terpilih"
                 
                 if st.button(label_hapus, type="secondary", use_container_width=True, disabled=item_dicentang.empty):
                     nama_yang_dihapus = item_dicentang["nama"].tolist()
-                    
-                    # Filter dan sisakan produk yang namanya tidak ada di daftar hapus
                     produk_tersisa = [p for p in st.session_state.produk if p["nama"] not in nama_yang_dihapus]
                     
                     st.session_state.produk = produk_tersisa
@@ -172,3 +167,6 @@ def render_admin():
                     st.rerun()
         else:
             st.info("Belum ada produk di dalam gudang.")
+
+    # ==============================================================================
+    # 🌟 TAB 3: LIVE CHAT DENG
