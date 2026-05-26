@@ -12,6 +12,9 @@ if "role" not in st.session_state: st.session_state.role = ""
 if "otp_step" not in st.session_state: st.session_state.otp_step = 1 
 if "generated_otp" not in st.session_state: st.session_state.generated_otp = ""
 if "temp_user_data" not in st.session_state: st.session_state.temp_user_data = {}
+if "forgot_step" not in st.session_state: st.session_state.forgot_step = 1
+if "forgot_email" not in st.session_state: st.session_state.forgot_email = ""
+if "forgot_otp" not in st.session_state: st.session_state.forgot_otp = ""
 
 if "produk" not in st.session_state:
     st.session_state.produk = load_produk()
