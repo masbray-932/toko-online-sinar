@@ -2,7 +2,8 @@ import streamlit as st
 import sqlite3
 import random
 from modul.database import DB_NAME
-from modul.keamanan import hash_password, verifikasi_password, kirim_email_otp  # Pastikan nama fungsi kirim email OTP kamu sesuai
+from modul.keamanan import hash_password, verifikasi_password
+import modul.keamanan as keamanan
 
 # ==============================================================================
 # FUNGSI PROSES DATABASE UNTUK LUPA PASSWORD
