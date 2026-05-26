@@ -1,8 +1,6 @@
 import streamlit as st
 import sqlite3
 import hashlib
-import random
-import string
 from modul.database import init_db, load_produk, DB_NAME
 from modul.halaman_auth import render_login, render_register, render_lupa_password
 from modul.halaman_toko import render_belanja, render_keranjang, render_riwayat
@@ -28,10 +26,10 @@ if not cursor.fetchone():
 conn.close()
 
 # ==============================================================================
-# STRUKTUR KEAMANAN: TOKEN VALIDASI MUTAKHIR (ANTI-LINK COPAS BROWSER LAIN)
+# STRUKTUR KEAMANAN: AMBIL KUNCI TETAP DARI SECRETS (ANTI-LOGOUT SAAT REFRESH)
 # ==============================================================================
-if "server_secret_seed" not in st.session_state:
-    st.session_state["server_secret_seed"] = "".join(random.choices(string.ascii_letters + string.digits, k=16))
+# Ambil dari st.secrets, kalau belum disetel pakai fallback teks default biar aman
+SECRET_SEED = st.secrets.get("TOKEN_SECRET_SEED", "KunciCadanganSinarBintangPermanen99")
 
 if "login" not in st.session_state: st.session_state.login = False
 if "username" not in st.session_state: st.session_state.username = ""
@@ -50,9 +48,9 @@ url_user = st.query_params.get("user")
 url_role = st.query_params.get("role")
 url_token = st.query_params.get("token")
 
-# 🌟 FIX LOGIKA: Validasi token hanya dipicu jika parameter di URL beneran lengkap ada isinya
+# Validasi kecocokan token pelindung di URL
 if url_user and url_role:
-    token_validasi_internal = hashlib.md5(f"{url_user}_{st.session_state['server_secret_seed']}".encode()).hexdigest()
+    token_validasi_internal = hashlib.md5(f"{url_user}_{SECRET_SEED}".encode()).hexdigest()
     
     if url_token:
         if url_token == token_validasi_internal:
@@ -60,14 +58,14 @@ if url_user and url_role:
             st.session_state.username = url_user
             st.session_state.role = url_role
         else:
-            # Token salah (Kasus: Link bajakan dicopas ke browser lain) -> TENDANG!
+            # Token tidak cocok (Kasus: Link copas bajakan pembajak) -> Tendang!
             st.query_params.clear()
             st.session_state.login = False
             st.session_state.username = ""
             st.session_state.role = ""
             st.rerun()
     elif not st.session_state.login:
-        # Ada parameter user tapi gada token, dan status memori belum login -> Bersihkan!
+        # Ada parameter tapi gaada token di URL dan memori kosong -> Bersihkan
         st.query_params.clear()
         st.rerun()
 
