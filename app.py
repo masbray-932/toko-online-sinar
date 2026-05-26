@@ -1,6 +1,13 @@
 import streamlit as st
 import sqlite3
 import hashlib
+import random
+import string
+
+# 🌟 AMANKAN CONFIG SECRETS DI AWAL SEBELUM IMPORT MODUL LOKAL
+SECRET_SEED = st.secrets.get("TOKEN_SECRET_SEED", "KunciCadanganSinarBintangPermanen99")
+
+# Baru load modul lokal setelah environment Streamlit siap
 from modul.database import init_db, load_produk, DB_NAME
 from modul.halaman_auth import render_login, render_register, render_lupa_password
 from modul.halaman_toko import render_belanja, render_keranjang, render_riwayat
@@ -9,7 +16,7 @@ from modul.halaman_admin import render_admin
 def hash_password_mandiri(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
-# 1. Jalankan Inisialisasi Database Utama
+# Jalankan Inisialisasi Database Utama
 init_db()
 
 # 👑 BUAT AKUN ADMIN OTOMATIS
@@ -26,11 +33,8 @@ if not cursor.fetchone():
 conn.close()
 
 # ==============================================================================
-# STRUKTUR KEAMANAN: AMBIL KUNCI TETAP DARI SECRETS (ANTI-LOGOUT SAAT REFRESH)
+# STRUKTUR KEAMANAN: VALIDASI TOKEN ANTI-LOGOUT
 # ==============================================================================
-# Ambil dari st.secrets, kalau belum disetel pakai fallback teks default biar aman
-SECRET_SEED = st.secrets.get("TOKEN_SECRET_SEED", "KunciCadanganSinarBintangPermanen99")
-
 if "login" not in st.session_state: st.session_state.login = False
 if "username" not in st.session_state: st.session_state.username = ""
 if "role" not in st.session_state: st.session_state.role = ""
@@ -48,7 +52,6 @@ url_user = st.query_params.get("user")
 url_role = st.query_params.get("role")
 url_token = st.query_params.get("token")
 
-# Validasi kecocokan token pelindung di URL
 if url_user and url_role:
     token_validasi_internal = hashlib.md5(f"{url_user}_{SECRET_SEED}".encode()).hexdigest()
     
@@ -58,14 +61,12 @@ if url_user and url_role:
             st.session_state.username = url_user
             st.session_state.role = url_role
         else:
-            # Token tidak cocok (Kasus: Link copas bajakan pembajak) -> Tendang!
             st.query_params.clear()
             st.session_state.login = False
             st.session_state.username = ""
             st.session_state.role = ""
             st.rerun()
     elif not st.session_state.login:
-        # Ada parameter tapi gaada token di URL dan memori kosong -> Bersihkan
         st.query_params.clear()
         st.rerun()
 
