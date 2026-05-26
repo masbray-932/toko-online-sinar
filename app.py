@@ -28,13 +28,11 @@ if not cursor.fetchone():
 conn.close()
 
 # ==============================================================================
-# 🌟 STRUKTUR KEAMANAN BARU: TOKEN VALIDASI MUTAKHIR (ANTI-LINK COPAS BROWSER LAIN)
+# STRUKTUR KEAMANAN: TOKEN VALIDASI MUTAKHIR (ANTI-LINK COPAS BROWSER LAIN)
 # ==============================================================================
-# Buat kunci rahasia server yang acak setiap kali server berjalan
 if "server_secret_seed" not in st.session_state:
     st.session_state["server_secret_seed"] = "".join(random.choices(string.ascii_letters + string.digits, k=16))
 
-# Inisialisasi Session State Dasar
 if "login" not in st.session_state: st.session_state.login = False
 if "username" not in st.session_state: st.session_state.username = ""
 if "role" not in st.session_state: st.session_state.role = ""
@@ -48,22 +46,17 @@ if "produk" not in st.session_state:
 if "keranjang" not in st.session_state:
     st.session_state.keranjang = []
 
-# PEMERIKSAAN SAKTI: Cek apakah token di URL cocok dengan token memori internal browser saat ini
 url_user = st.query_params.get("user")
 url_role = st.query_params.get("role")
 url_token = st.query_params.get("token")
 
-# Token internal dihitung dari gabungan username + secret seed server
 if url_user and url_role and url_token:
     token_validasi_internal = hashlib.md5(f"{url_user}_{st.session_state['server_secret_seed']}".encode()).hexdigest()
-    
-    # Jika token di URL COCOK dengan memori internal, pertahankan login (Kasus: User pencet Refresh F5)
     if url_token == token_validasi_internal:
         st.session_state.login = True
         st.session_state.username = url_user
         st.session_state.role = url_role
     else:
-        # Jika token TIDAK COCOK (Kasus: Orang lain copas link), paksa bersihkan URL dan tendang ke Login!
         st.query_params.clear()
         st.session_state.login = False
         st.session_state.username = ""
@@ -75,15 +68,12 @@ if url_user and url_role and url_token:
 if not st.session_state.login:
     if st.session_state.auth_page == "Login":
         render_login()
-        
-        # Jika login sukses dari fungsi render_login, rakit token rahasia dan tempel di URL
         if st.session_state.login:
             token_baru = hashlib.md5(f"{st.session_state.username}_{st.session_state['server_secret_seed']}".encode()).hexdigest()
             st.query_params["user"] = st.session_state.username
             st.query_params["role"] = st.session_state.role
-            st.query_params["token"] = token_baru  # 👈 Tempel token pelindung di URL
+            st.query_params["token"] = token_baru  
             st.rerun()
-            
     elif st.session_state.auth_page == "Register":
         render_register()
     elif st.session_state.auth_page == "Lupa Password":
@@ -101,7 +91,6 @@ else:
         
     menu = st.sidebar.radio("Pilih Halaman", list_menu)
     
-    # TOMBOL LOGOUT: Bersihkan parameter dan memori total
     if st.sidebar.button("Logout"):
         st.query_params.clear()
         st.session_state.login = False
@@ -117,11 +106,8 @@ else:
     elif menu == "Riwayat Belanja": 
         render_riwayat() 
     elif menu == "💬 Chat Admin":
-        from modul.halaman_toko import render_chat_admin
+        # 🌟 AMAN: Impor dipanggil di sini dari file independen baru
+        from modul.halaman_chat import render_chat_admin
         render_chat_admin()
     elif menu == "Admin Panel" and st.session_state.role == "admin": 
         render_admin()
-    elif menu == "💬 Chat Admin":
-        # 🌟 PERBAIKAN: Impor dari file modul baru yang independen dan aman
-        from modul.halaman_chat import render_chat_admin
-        render_chat_admin()
