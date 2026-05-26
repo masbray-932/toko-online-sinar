@@ -24,9 +24,16 @@ if "keranjang" not in st.session_state:
 st.sidebar.title("Navigation")
 
 if not st.session_state.login:
-    menu = st.sidebar.selectbox("Menu Auth", ["Login", "Register"])
-    if menu == "Register": render_register()
-    elif menu == "Login": render_login()
+    # Tambahkan opsi "Lupa Password" ke dalam selectbox
+    menu = st.sidebar.selectbox("Menu Auth", ["Login", "Register", "Lupa Password"])
+    
+    if menu == "Register": 
+        render_register()
+    elif menu == "Login": 
+        render_login()
+    elif menu == "Lupa Password": 
+        from modul.halaman_auth import render_lupa_password
+        render_lupa_password()
 else:
     st.sidebar.write(f"Logged in as: **{st.session_state.username}** ({st.session_state.role})")
     
