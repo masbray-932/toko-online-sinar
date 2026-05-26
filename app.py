@@ -1,6 +1,6 @@
 import streamlit as st
 from modul.database import init_db, load_produk
-from modul.halaman_auth import render_login, render_register
+from modul.halaman_auth import render_login, render_register, render_lupa_password
 from modul.halaman_toko import render_belanja, render_keranjang, render_riwayat
 from modul.halaman_admin import render_admin
 
@@ -12,20 +12,20 @@ if "role" not in st.session_state: st.session_state.role = ""
 if "otp_step" not in st.session_state: st.session_state.otp_step = 1 
 if "generated_otp" not in st.session_state: st.session_state.generated_otp = ""
 if "temp_user_data" not in st.session_state: st.session_state.temp_user_data = {}
-if "forgot_step" not in st.session_state: st.session_state.forgot_step = 1
-if "forgot_email" not in st.session_state: st.session_state.forgot_email = ""
-if "forgot_otp" not in st.session_state: st.session_state.forgot_otp = ""
+
+# State untuk melacak halaman auth mana yang sedang aktif di halaman utama
+if "auth_page" not in st.session_state: st.session_state.auth_page = "Login"
 
 if "produk" not in st.session_state:
     st.session_state.produk = load_produk()
 if "keranjang" not in st.session_state:
     st.session_state.keranjang = []
 
+# ==============================================================================
+# ALUR NAVIGASI UTAMA
+# ==============================================================================
 if not st.session_state.login:
-    # Kita buat session state baru untuk melacak halaman auth mana yang aktif
-    if "auth_page" not in st.session_state:
-        st.session_state.auth_page = "Login"
-        
+    # Jika belum login, sidebar dikosongkan total (Navigasi pindah ke halaman utama)
     if st.session_state.auth_page == "Login":
         render_login()
     elif st.session_state.auth_page == "Register":
@@ -33,8 +33,8 @@ if not st.session_state.login:
     elif st.session_state.auth_page == "Lupa Password":
         render_lupa_password()
 else:
-    # 🌟 PINDAHKAN KE SINI: Judul navigation baru muncul kalau USER SUDAH LOGIN
-    st.sidebar.title("Navigation") 
+    # Jika sudah login, judul Navigation dan menu baru dimunculkan di sidebar
+    st.sidebar.title("Navigation")
     st.sidebar.write(f"Logged in as: **{st.session_state.username}** ({st.session_state.role})")
     
     # Hitung badge total item di keranjang secara real-time
@@ -45,39 +45,8 @@ else:
         nama_menu_keranjang = "Keranjang & Checkout"
         
     list_menu = ["Belanja", nama_menu_keranjang, "Riwayat Belanja"]
-    if st.session_state.role == "admin": list_menu.append("Admin Panel")
-
-st.sidebar.title("Navigation")
-
-# KODE BARU (Navigasi dikendalikan lewat halaman utama):
-if not st.session_state.login:
-    # Kita buat session state baru untuk melacak halaman auth mana yang aktif
-    if "auth_page" not in st.session_state:
-        st.session_state.auth_page = "Login"
-        
-    if st.session_state.auth_page == "Login":
-        render_login()
-    elif st.session_state.auth_page == "Register":
-        render_register()
-    elif st.session_state.auth_page == "Lupa Password":
-        render_lupa_password()
-else:
-    st.sidebar.write(f"Logged in as: **{st.session_state.username}** ({st.session_state.role})")
-    
-    # ==========================================================================
-    # LOGIKA BARU: HITUNG BADGE TOTAL ITEM DI KERANJANG SECARA REAL-TIME
-    # ==========================================================================
-    total_item = sum(item["jumlah"] for item in st.session_state.keranjang)
-    
-    if total_item > 0:
-        nama_menu_keranjang = f"Keranjang & Checkout ( {total_item} )"
-    else:
-        nama_menu_keranjang = "Keranjang & Checkout"
-    # ==========================================================================
-    
-    # Masukkan variabel nama_menu_keranjang ke dalam list navigasi
-    list_menu = ["Belanja", nama_menu_keranjang, "Riwayat Belanja"]
-    if st.session_state.role == "admin": list_menu.append("Admin Panel")
+    if st.session_state.role == "admin": 
+        list_menu.append("Admin Panel")
         
     menu = st.sidebar.radio("Pilih Halaman", list_menu)
     
@@ -88,10 +57,10 @@ else:
         st.session_state.keranjang = [] 
         st.rerun()
 
-    # Pengecekan halaman diselaraskan dengan variabel menu dinamis tadi
+    # Logika penampilan halaman setelah login
     if menu == "Belanja": 
         render_belanja()
-    elif menu == nama_menu_keranjang: # 👈 Menggunakan variabel agar tidak pecah/eror
+    elif menu == nama_menu_keranjang: 
         render_keranjang()
     elif menu == "Riwayat Belanja": 
         render_riwayat() 
